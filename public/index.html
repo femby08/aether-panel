@@ -1,9 +1,11 @@
+# --- INDEX.HTML ---
+cat <<'EOF' > /opt/aetherpanel/public/index.html
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEBULA V1.1</title>
+    <title>NEBULA</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -17,25 +19,49 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
 </head>
 <body>
-    <div id="editor-modal" class="modal-overlay" style="display:none"><div class="modal glass"><div class="modal-header"><h3>Editor</h3><div><button class="btn btn-ghost" onclick="closeEditor()">Cerrar</button><button class="btn btn-primary" onclick="saveFile()">Guardar</button></div></div><div id="ace-editor"></div></div></div>
-    <div id="version-modal" class="modal-overlay" style="display:none"><div class="modal glass version-modal"><div class="modal-header"><h3><i class="fa-solid fa-cloud"></i> Repositorio</h3><button class="btn btn-ghost" onclick="document.getElementById('version-modal').style.display='none'"><i class="fa-solid fa-xmark"></i></button></div><div class="mod-search"><input type="text" id="version-search" placeholder="Buscar versión..." class="search-input" autofocus><span id="loading-text" style="display:none;font-size:12px;color:var(--p)"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</span></div><div id="version-list" class="version-grid"></div></div></div>
+    <div id="editor-modal" class="modal-overlay" style="display:none">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h3>Editor</h3>
+                <div>
+                    <button class="btn btn-ghost" onclick="closeEditor()">Cerrar</button>
+                    <button class="btn btn-primary" onclick="saveFile()">Guardar</button>
+                </div>
+            </div>
+            <div id="ace-editor"></div>
+        </div>
+    </div>
+
+    <div id="version-modal" class="modal-overlay" style="display:none">
+        <div class="modal glass version-modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-cloud"></i> Repositorio</h3>
+                <button class="btn btn-ghost" onclick="document.getElementById('version-modal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="mod-search">
+                <input type="text" id="version-search" placeholder="Buscar versión..." class="search-input" autofocus>
+                <span id="loading-text" style="display:none;font-size:12px;color:var(--p)"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</span>
+            </div>
+            <div id="version-list" class="version-grid"></div>
+        </div>
+    </div>
     
     <div id="update-modal" class="modal-overlay" style="display:none">
         <div class="modal glass" style="height:auto; max-width:400px; text-align:center; padding:20px;">
             <div style="font-size:3rem; color:var(--p); margin-bottom:10px"><i class="fa-solid fa-bolt"></i></div>
-            <h3>Nueva Versión Disponible</h3>
-            <p id="update-text" style="color:var(--muted); margin-bottom:20px">Calculando...</p>
-            <div style="display:flex; flex-direction:column; gap:10px">
-                <button onclick="updateSystem('now')" class="btn btn-primary">ACTUALIZAR AHORA</button>
-                <button onclick="updateSystem('stop')" class="btn" style="background:#f59e0b; color:white">AL APAGAR SERVIDOR</button>
-                <button onclick="document.getElementById('update-modal').style.display='none'" class="btn btn-ghost">CANCELAR</button>
-            </div>
+            <h3 id="up-title">Actualización</h3>
+            <p id="update-text" style="color:var(--muted); margin-bottom:20px">...</p>
+            <div id="up-actions" style="display:flex; flex-direction:column; gap:10px">
+                </div>
         </div>
     </div>
 
     <div class="app-layout">
         <aside class="sidebar">
-            <div class="brand"><div class="brand-logo"><i class="fa-solid fa-meteor"></i></div><div class="brand-text">V1.1 <span>NEBULA</span></div></div>
+            <div class="brand">
+                <div class="brand-logo"><i class="fa-solid fa-meteor"></i></div>
+                <div class="brand-text"><span id="sidebar-version-text">V...</span> <span>NEBULA</span></div>
+            </div>
             <nav>
                 <div class="nav-label">CORE</div>
                 <button onclick="setTab('stats', this)" class="nav-btn active"><i class="fa-solid fa-chart-simple"></i> Monitor</button>
@@ -52,12 +78,21 @@
                     <button onclick="setTheme('dark')" class="theme-btn active" title="Oscuro"><i class="fa-solid fa-moon"></i></button>
                     <button onclick="setTheme('auto')" class="theme-btn" title="Sistema"><i class="fa-solid fa-desktop"></i></button>
                 </div>
-                <div class="status-widget OFFLINE" id="status-widget"><div class="status-indicator"></div><span id="status-text">OFFLINE</span></div>
+                <div class="status-widget OFFLINE" id="status-widget">
+                    <div class="status-indicator"></div>
+                    <span id="status-text">OFFLINE</span>
+                </div>
             </div>
         </aside>
         <main>
             <header>
-                <div class="server-info"><h1>Nebula Dashboard</h1><div class="badges"><span class="badge badge-primary">V1.1</span><span class="badge">Stable</span></div></div>
+                <div class="server-info">
+                    <h1>Nebula Dashboard</h1>
+                    <div class="badges">
+                        <span class="badge badge-primary" id="header-version">Loading...</span>
+                        <span class="badge">Stable</span>
+                    </div>
+                </div>
                 <div class="actions">
                     <button onclick="api('power/start')" class="btn-control start" title="Iniciar"><i class="fa-solid fa-play"></i></button>
                     <button onclick="api('power/restart')" class="btn-control restart" title="Reiniciar"><i class="fa-solid fa-rotate-right"></i></button>
@@ -68,38 +103,79 @@
 
             <div id="tab-stats" class="tab-content active">
                 <div class="stats-grid">
-                    <div class="card glass"><div class="card-header"><h3>CPU</h3><span class="stat-value" id="cpu-val">0%</span></div><div class="chart-container"><canvas id="cpuChart"></canvas></div></div>
-                    <div class="card glass"><div class="card-header"><h3>RAM</h3><span class="stat-value" id="ram-val">0 MB</span></div><div class="chart-container"><canvas id="ramChart"></canvas></div></div>
-                    <div class="card glass"><div class="card-header"><h3>Disco</h3><span class="stat-value" id="disk-val">...</span></div><div class="disk-bar"><div class="disk-fill" id="disk-fill"></div></div></div>
+                    <div class="card glass">
+                        <div class="card-header"><h3>CPU</h3><span class="stat-value" id="cpu-val">0%</span></div>
+                        <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-header"><h3>RAM</h3><span class="stat-value" id="ram-val">0 MB</span></div>
+                        <div class="chart-container"><canvas id="ramChart"></canvas></div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-header"><h3>Disco</h3><span class="stat-value" id="disk-val">...</span></div>
+                        <div class="disk-bar"><div class="disk-fill" id="disk-fill"></div></div>
+                    </div>
                 </div>
             </div>
             
-            <div id="tab-console" class="tab-content"><div class="console-box glass"><div id="terminal"></div></div></div>
-            <div id="tab-files" class="tab-content"><div class="card glass full"><div class="card-header"><div class="breadcrumb" id="file-breadcrumb">/root</div><div><button onclick="loadFileBrowser(currentPath)" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i></button><button onclick="uploadFile()" class="btn btn-primary"><i class="fa-solid fa-upload"></i></button></div></div><div id="file-list" class="file-list"></div></div></div>
+            <div id="tab-console" class="tab-content">
+                <div class="console-box glass"><div id="terminal"></div></div>
+            </div>
+
+            <div id="tab-files" class="tab-content">
+                <div class="card glass full">
+                    <div class="card-header">
+                        <div class="breadcrumb" id="file-breadcrumb">/root</div>
+                        <div>
+                            <button onclick="loadFileBrowser(currentPath)" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i></button>
+                            <button onclick="uploadFile()" class="btn btn-primary"><i class="fa-solid fa-upload"></i></button>
+                        </div>
+                    </div>
+                    <div id="file-list" class="file-list"></div>
+                </div>
+            </div>
             
             <div id="tab-versions" class="tab-content">
                 <h2 class="tab-title">Núcleos Disponibles</h2>
                 <div class="versions-container">
-                    <div class="version-card glass" onclick="loadVersions('vanilla')"><div class="v-icon" style="background:#27ae60"><i class="fa-solid fa-cube"></i></div><div class="v-info"><h3>Vanilla</h3><p>Oficial</p></div></div>
-                    <div class="version-card glass" onclick="loadVersions('paper')"><div class="v-icon" style="background:#2980b9"><i class="fa-solid fa-paper-plane"></i></div><div class="v-info"><h3>Paper</h3><p>Optimizado</p></div></div>
-                    <div class="version-card glass" onclick="loadVersions('fabric')"><div class="v-icon" style="background:#f39c12"><i class="fa-solid fa-scroll"></i></div><div class="v-info"><h3>Fabric</h3><p>Mods</p></div></div>
-                    <div class="version-card glass" onclick="loadVersions('forge')"><div class="v-icon" style="background:#c0392b"><i class="fa-solid fa-hammer"></i></div><div class="v-info"><h3>Forge</h3><p>Ilimitado</p></div></div>
+                    <div class="version-card glass" onclick="loadVersions('vanilla')">
+                        <div class="v-icon" style="background:#27ae60"><i class="fa-solid fa-cube"></i></div>
+                        <div class="v-info"><h3>Vanilla</h3><p>Oficial</p></div>
+                    </div>
+                    <div class="version-card glass" onclick="loadVersions('paper')">
+                        <div class="v-icon" style="background:#2980b9"><i class="fa-solid fa-paper-plane"></i></div>
+                        <div class="v-info"><h3>Paper</h3><p>Optimizado</p></div>
+                    </div>
+                    <div class="version-card glass" onclick="loadVersions('fabric')">
+                        <div class="v-icon" style="background:#f39c12"><i class="fa-solid fa-scroll"></i></div>
+                        <div class="v-info"><h3>Fabric</h3><p>Mods</p></div>
+                    </div>
+                    <div class="version-card glass" onclick="loadVersions('forge')">
+                        <div class="v-icon" style="background:#c0392b"><i class="fa-solid fa-hammer"></i></div>
+                        <div class="v-info"><h3>Forge</h3><p>Ilimitado</p></div>
+                    </div>
                 </div>
             </div>
             
-            <div id="tab-backups" class="tab-content"><div class="card glass full"><div class="card-header"><h3>Backups</h3><button onclick="createBackup()" class="btn btn-primary">Crear</button></div><div id="backup-list" class="file-list"></div></div></div>
+            <div id="tab-backups" class="tab-content">
+                <div class="card glass full">
+                    <div class="card-header">
+                        <h3>Backups</h3>
+                        <button onclick="createBackup()" class="btn btn-primary">Crear</button>
+                    </div>
+                    <div id="backup-list" class="file-list"></div>
+                </div>
+            </div>
             
             <div id="tab-config" class="tab-content">
                 <div class="card glass full">
                     <div class="card-header">
-                        <h3>Configuración del Servidor</h3>
-                        <button onclick="saveCfg()" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                        <h3>Configuración</h3>
+                        <button onclick="saveCfg()" class="btn btn-primary">Guardar</button>
                     </div>
                     <div id="cfg-list" class="cfg-grid"></div>
-                    
-                    <div style="padding: 20px; border-top: 1px solid var(--border); margin-top: 20px;">
-                        <h3 style="color: var(--muted); font-size: 0.9rem; margin-bottom: 15px;">MANTENIMIENTO DEL SISTEMA</h3>
-                        <button onclick="manualUpdateCheck()" class="btn" style="background: #8b5cf6; border: 1px solid var(--border); width: 100%; justify-content: center;">
+                    <div style="padding:20px; margin-top:20px; border-top:1px solid var(--border)">
+                        <button onclick="checkUpdate()" class="btn" style="background:#8b5cf6; width:100%; justify-content:center; border: 1px solid var(--border);">
                             <i class="fa-solid fa-rotate"></i> BUSCAR ACTUALIZACIONES DE NEBULA
                         </button>
                     </div>
