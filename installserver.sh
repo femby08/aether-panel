@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # ============================================================
-# NEBULA PANEL - V1.3.0 (UPDATER SEPARADO)
-# - Fix: Script 'updater.sh' externo para actualizaciones seguras.
-# - Feat: Auto-Check al cargar la página.
-# - Hard Update (Reinicia) vs Soft Update (Solo Web).
+# NEBULA PANEL - V1.3.0 (LOGO FIX)
+# - Updater ahora protege y organiza logo.svg y logo.png/ico
+# - Mantiene todas las funcionalidades de la V1.3.0
 # ============================================================
 clear
 set -e
@@ -15,12 +14,11 @@ CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-echo -e "${PURPLE}🌌 INSTALANDO NEBULA V1.3.0 (ARCHITECTURE UPDATE)...${NC}"
+echo -e "${PURPLE}🌌 INSTALANDO NEBULA V1.3.0 (LOGO SUPPORT)...${NC}"
 
 # ============================================================
 # 1. PREPARACIÓN
 # ============================================================
-# Sincronizar hora
 CURRENT_DATE=$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep Date: | cut -d' ' -f5-8)
 if [ ! -z "$CURRENT_DATE" ]; then date -s "$CURRENT_DATE" >/dev/null 2>&1; fi
 
@@ -30,9 +28,8 @@ rm -rf /opt/aetherpanel
 mkdir -p /opt/aetherpanel/{servers/default,public,backups}
 
 # ============================================================
-# 2. EL SCRIPT DE ACTUALIZACIÓN (EL MOTOR EXTERNO)
+# 2. EL SCRIPT DE ACTUALIZACIÓN (CON PROTECCIÓN DE LOGOS)
 # ============================================================
-# Este script se queda en el sistema y es llamado por Node.js
 cat <<'EOF' > /opt/aetherpanel/updater.sh
 #!/bin/bash
 # Nebula External Updater
@@ -41,7 +38,7 @@ REPO_ZIP="https://github.com/reychampi/nebula/archive/refs/heads/main.zip"
 
 echo "--- STARTING UPDATE $(date) ---" > $LOG
 
-# 1. Detener servicio (si no se detuvo ya)
+# 1. Detener servicio
 systemctl stop aetherpanel >> $LOG 2>&1
 
 # 2. Limpiar temporales
@@ -49,33 +46,41 @@ rm -rf /tmp/nebula_update /tmp/update.zip >> $LOG 2>&1
 mkdir -p /tmp/nebula_update
 
 # 3. Descargar
-echo "Downloading..." >> $LOG
+echo "Downloading repo..." >> $LOG
 wget $REPO_ZIP -O /tmp/update.zip >> $LOG 2>&1
 
 # 4. Descomprimir
-echo "Unzipping..." >> $LOG
 unzip -o /tmp/update.zip -d /tmp/nebula_update >> $LOG 2>&1
 
-# 5. Detectar carpeta interna (Inteligente)
+# 5. Detectar carpeta
 EXTRACTED_DIR=$(ls /tmp/nebula_update | head -n 1)
-echo "Detected folder: $EXTRACTED_DIR" >> $LOG
 
-# 6. Copiar Archivos (SOBRESCRIBIR TODO)
+# 6. Copiar Archivos
 echo "Copying files..." >> $LOG
 cp -r /tmp/nebula_update/$EXTRACTED_DIR/* /opt/aetherpanel/ >> $LOG 2>&1
 
-# 7. Restaurar permisos del updater (por si acaso se sobrescribió sin +x)
-chmod +x /opt/aetherpanel/updater.sh
+# 7. ORGANIZACIÓN DE LOGOS (NUEVO)
+# Si los logos están en la raíz, los movemos a public para que la web los vea
+echo "Organizing assets..." >> $LOG
+[ -f /opt/aetherpanel/logo.svg ] && mv /opt/aetherpanel/logo.svg /opt/aetherpanel/public/
+[ -f /opt/aetherpanel/logo.png ] && mv /opt/aetherpanel/logo.png /opt/aetherpanel/public/
+[ -f /opt/aetherpanel/logo.ico ] && mv /opt/aetherpanel/logo.ico /opt/aetherpanel/public/
 
-# 8. Instalar dependencias nuevas
+# 8. LIMPIEZA SEGURA
+# Ya NO borramos *.png ni *.jpg para no perder los logos
+rm -f /opt/aetherpanel/installserver.sh
+rm -f /opt/aetherpanel/README.md
+rm -f /opt/aetherpanel/.gitignore
+
+# 9. Restaurar permisos e instalar
+chmod +x /opt/aetherpanel/updater.sh
 cd /opt/aetherpanel
 npm install >> $LOG 2>&1
 
-# 9. Reiniciar servicio
-echo "Restarting service..." >> $LOG
+# 10. Reiniciar
+echo "Restarting..." >> $LOG
 systemctl start aetherpanel >> $LOG 2>&1
-
-echo "--- UPDATE FINISHED ---" >> $LOG
+echo "Done." >> $LOG
 EOF
 
 chmod +x /opt/aetherpanel/updater.sh
@@ -89,7 +94,7 @@ cat <<'EOF' > /opt/aetherpanel/package.json
 {
   "name": "aetherpanel-nebula",
   "version": "1.3.0",
-  "description": "Nebula V1.3 Split Updater",
+  "description": "Nebula V1.3",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
   "dependencies": {
@@ -134,7 +139,7 @@ const BACKUP_DIR = path.join(__dirname, 'backups');
 const apiClient = axios.create({ headers: { 'User-Agent': 'Nebula-Panel/1.3.0' } });
 const REPO_RAW = 'https://raw.githubusercontent.com/reychampi/nebula/main';
 
-// --- INFO API (READ DISK) ---
+// --- INFO API ---
 app.get('/api/info', (req, res) => {
     try {
         const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
@@ -142,25 +147,18 @@ app.get('/api/info', (req, res) => {
     } catch (e) { res.json({ version: 'Unknown' }); }
 });
 
-// --- LOGICA DE ACTUALIZACIÓN HÍBRIDA ---
+// --- UPDATER ---
 app.get('/api/update/check', async (req, res) => {
     try {
-        // 1. Leer Local
         const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-        
-        // 2. Leer Remoto
         const remotePkg = (await apiClient.get(`${REPO_RAW}/package.json`)).data;
         
-        // A. HARD UPDATE (Cambio de versión)
         if (remotePkg.version !== localPkg.version) {
             return res.json({ type: 'hard', local: localPkg.version, remote: remotePkg.version });
         }
 
-        // B. SOFT UPDATE (Check visual files hash/content)
-        // Solo chequeamos index.html y style.css para velocidad
         const files = ['public/index.html', 'public/style.css', 'public/app.js'];
         let hasChanges = false;
-        
         for (const f of files) {
             const remoteContent = (await apiClient.get(`${REPO_RAW}/${f}`)).data;
             const localPath = path.join(__dirname, f);
@@ -172,37 +170,20 @@ app.get('/api/update/check', async (req, res) => {
                 }
             }
         }
-
         if (hasChanges) return res.json({ type: 'soft', local: localPkg.version, remote: remotePkg.version });
-        
         res.json({ type: 'none' });
-
-    } catch (e) {
-        console.error(e);
-        res.json({ type: 'error' });
-    }
+    } catch (e) { res.json({ type: 'error' }); }
 });
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
-
     if (type === 'hard') {
-        // EJECUTAR SCRIPT EXTERNO Y MATAR PROCESO NODE
-        io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización de sistema...' });
-        
-        // Spawn detached process
-        const updater = spawn('bash', ['/opt/aetherpanel/updater.sh'], {
-            detached: true,
-            stdio: 'ignore'
-        });
+        io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización...' });
+        const updater = spawn('bash', ['/opt/aetherpanel/updater.sh'], { detached: true, stdio: 'ignore' });
         updater.unref();
-        
         res.json({ success: true, mode: 'hard' });
-        
-        // Dar tiempo al frontend para recibir la respuesta antes de morir
         setTimeout(() => process.exit(0), 1000);
-    } 
-    else if (type === 'soft') {
+    } else if (type === 'soft') {
         io.emit('toast', { type: 'info', msg: '✨ Actualizando interfaz...' });
         try {
             const files = ['public/index.html', 'public/style.css', 'public/app.js'];
@@ -244,13 +225,31 @@ app.post('/api/nebula/resolve-vanilla', async (req, res) => {
     try { const r = await apiClient.get(req.body.url); res.json({ url: r.data.downloads.server.url }); } catch (e) { res.status(500).json({error: 'Error resolving'}); }
 });
 
+// --- MOD INSTALLER API ---
+app.post('/api/mods/install', async (req, res) => {
+    const { url, name } = req.body;
+    const modsDir = path.join(SERVER_DIR, 'mods');
+    if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir);
+    io.emit('toast', { type: 'info', msg: `Instalando ${name}...` });
+    const fileName = name.replace(/\s+/g, '_') + '.jar';
+    const target = path.join(modsDir, fileName);
+    exec(`wget -q -O "${target}" "${url}"`, (error) => {
+        if (error) {
+            io.emit('toast', { type: 'error', msg: 'Error al descargar' });
+            res.json({ success: false });
+        } else {
+            io.emit('toast', { type: 'success', msg: 'Instalado' });
+            res.json({ success: true });
+        }
+    });
+});
+
 app.get('/api/stats', (req, res) => {
     osUtils.cpuUsage((cpu) => {
         let disk = 0; try { fs.readdirSync(SERVER_DIR).forEach(f => { try { disk += fs.statSync(path.join(SERVER_DIR, f)).size; } catch {} }); } catch {}
         res.json({ cpu: cpu * 100, ram_used: (os.totalmem()-os.freemem())/1048576, ram_total: os.totalmem()/1048576, disk_used: disk/1048576, disk_total: 20480 });
     });
 });
-
 app.get('/api/status', (req, res) => res.json(mcServer.getStatus()));
 app.post('/api/power/:action', async (req, res) => { try{if(mcServer[req.params.action])await mcServer[req.params.action]();res.json({success:true});}catch(e){res.status(500).json({error:e.message});}});
 app.get('/api/config', (req, res) => res.json(mcServer.readProperties()));
@@ -327,10 +326,10 @@ module.exports = MCManager;
 EOF
 
 # ============================================================
-# 4. FRONTEND (Visual Fix + Auto-Check)
+# 3. FRONTEND
 # ============================================================
 
-# --- INDEX.HTML (Versión Hardcoded 1.3.0) ---
+# --- INDEX.HTML (Con Favicon y Logo SVG) ---
 cat <<'EOF' > /opt/aetherpanel/public/index.html
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
@@ -338,6 +337,7 @@ cat <<'EOF' > /opt/aetherpanel/public/index.html
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEBULA</title>
+    <link rel="icon" href="logo.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -365,7 +365,10 @@ cat <<'EOF' > /opt/aetherpanel/public/index.html
 
     <div class="app-layout">
         <aside class="sidebar">
-            <div class="brand"><div class="brand-logo"><i class="fa-solid fa-meteor"></i></div><div class="brand-text"><span id="sidebar-version-text">V1.3.0</span> <span>NEBULA</span></div></div>
+            <div class="brand">
+                <div class="brand-logo"><img src="logo.svg" style="width:24px;height:24px"></div>
+                <div class="brand-text"><span id="sidebar-version-text">V1.3.0</span> <span>NEBULA</span></div>
+            </div>
             <nav>
                 <div class="nav-label">CORE</div>
                 <button onclick="setTab('stats', this)" class="nav-btn active"><i class="fa-solid fa-chart-simple"></i> Monitor</button>
@@ -373,6 +376,7 @@ cat <<'EOF' > /opt/aetherpanel/public/index.html
                 <div class="nav-label">DATA</div>
                 <button onclick="setTab('files', this)" class="nav-btn"><i class="fa-solid fa-folder-tree"></i> Archivos</button>
                 <button onclick="setTab('versions', this)" class="nav-btn"><i class="fa-solid fa-layer-group"></i> Núcleos</button>
+                <button onclick="openModStore()" class="nav-btn"><i class="fa-solid fa-puzzle-piece"></i> Mods</button>
                 <button onclick="setTab('backups', this)" class="nav-btn"><i class="fa-solid fa-box-archive"></i> Backups</button>
                 <button onclick="setTab('config', this)" class="nav-btn"><i class="fa-solid fa-sliders"></i> Ajustes</button>
             </nav>
@@ -411,7 +415,7 @@ cat <<'EOF' > /opt/aetherpanel/public/index.html
 </html>
 EOF
 
-# --- APP.JS (AUTO-CHECK AL INICIO) ---
+# --- APP.JS (Con Tienda Mods) ---
 cat <<'EOF' > /opt/aetherpanel/public/app.js
 const socket = io();
 let currentPath = '', currentFile = '', allVersions = [];
@@ -422,7 +426,6 @@ fetch('/api/info').then(r=>r.json()).then(d => {
     document.getElementById('header-version').innerText = 'V' + d.version;
 });
 
-// THEMES
 function setTheme(mode) { localStorage.setItem('theme', mode); updateThemeUI(mode); }
 function updateThemeUI(mode) {
     let apply = mode; if(mode==='auto') apply = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light';
@@ -433,15 +436,15 @@ function updateThemeUI(mode) {
 }
 updateThemeUI(localStorage.getItem('theme') || 'dark');
 
-// CHECK UPDATES (AUTO ON LOAD)
-function checkUpdate() {
+// UPDATER
+checkUpdate(true);
+function checkUpdate(isAuto=false) {
+    if(!isAuto) Toastify({text:'Buscando...', style:{background:'var(--p)'}}).showToast();
     fetch('/api/update/check').then(r=>r.json()).then(d => {
         if(d.type !== 'none') showUpdateModal(d);
-        else if (event && event.type === 'click') Toastify({text:'Sistema actualizado', style:{background:'#10b981'}}).showToast();
+        else if(!isAuto) Toastify({text:'Sistema actualizado', style:{background:'#10b981'}}).showToast();
     });
 }
-checkUpdate(); // Auto-check
-
 function showUpdateModal(d) {
     const m = document.getElementById('update-modal');
     const t = document.getElementById('update-text');
@@ -450,34 +453,47 @@ function showUpdateModal(d) {
     
     if(d.type === 'hard') {
         ti.innerText = "Actualización Mayor";
-        t.innerText = `Versión local: ${d.local}\nNueva versión: ${d.remote}\n\nSe requiere reinicio del panel.`;
-        a.innerHTML = `<button onclick="doUpdate('hard')" class="btn btn-primary">ACTUALIZAR SISTEMA</button><button onclick="document.getElementById('update-modal').style.display='none'" class="btn btn-ghost">Cancelar</button>`;
+        t.innerText = `Versión local: ${d.local}\nNueva versión: ${d.remote}\n\nSe requiere reinicio.`;
+        a.innerHTML = `<button onclick="doUpdate('hard')" class="btn btn-primary">ACTUALIZAR</button><button onclick="document.getElementById('update-modal').style.display='none'" class="btn btn-ghost">Cancelar</button>`;
         m.style.display='flex';
-    } else if (d.type === 'soft') {
+    } else if(d.type === 'soft') {
         ti.innerText = "Mejora Visual";
-        t.innerText = `Se han detectado cambios visuales en la versión ${d.local}.`;
+        t.innerText = `Cambios visuales detectados.`;
         a.innerHTML = `<button onclick="doUpdate('soft')" class="btn" style="background:#10b981;color:white">APLICAR HOTFIX</button><button onclick="document.getElementById('update-modal').style.display='none'" class="btn btn-ghost">Cancelar</button>`;
         m.style.display='flex';
     }
 }
-
 function doUpdate(type) {
     document.getElementById('update-modal').style.display='none';
-    fetch('/api/update/perform', {
-        method: 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type})
-    }).then(r=>r.json()).then(d=>{
-        if(d.mode === 'soft') {
-            Toastify({text:'Interfaz actualizada. Recargando...', style:{background:'#10b981'}}).showToast();
-            setTimeout(()=>location.reload(), 1500);
-        }
-        if(d.mode === 'hard') {
-            Toastify({text:'Reiniciando sistema... espera 5s', style:{background:'#f59e0b'}}).showToast();
-            setTimeout(()=>location.reload(), 5000);
-        }
+    fetch('/api/update/perform', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type})}).then(r=>r.json()).then(d=>{
+        if(d.mode === 'soft') { Toastify({text:'Aplicado. Recargando...', style:{background:'#10b981'}}).showToast(); setTimeout(()=>location.reload(), 1500); }
+        if(d.mode === 'hard') { Toastify({text:'Reiniciando sistema...', style:{background:'#f59e0b'}}).showToast(); setTimeout(()=>location.reload(), 8000); }
     });
 }
 
-// ... (Rest of Charts, Terminal, etc. remains same)
+// MODS STORE
+const modsDB = [
+    { name: "Jei (Just Enough Items)", url: "https://mediafilez.forgecdn.net/files/5936/206/jei-1.20.1-forge-15.3.0.4.jar", icon: "fa-book" },
+    { name: "Iron Chests", url: "https://mediafilez.forgecdn.net/files/4670/664/ironchest-1.20.1-14.4.4.jar", icon: "fa-box" },
+    { name: "JourneyMap", url: "https://mediafilez.forgecdn.net/files/5864/381/journeymap-1.20.1-5.9.18-forge.jar", icon: "fa-map" },
+    { name: "Nature's Compass", url: "https://mediafilez.forgecdn.net/files/4682/937/NaturesCompass-1.20.1-1.11.2-forge.jar", icon: "fa-compass" },
+    { name: "Clumps", url: "https://mediafilez.forgecdn.net/files/4603/862/Clumps-forge-1.20.1-12.0.0.3.jar", icon: "fa-users" }
+];
+
+function openModStore() {
+    const m = document.getElementById('version-modal'); m.style.display='flex'; 
+    document.getElementById('version-list').innerHTML=''; 
+    m.querySelector('h3').innerHTML='<i class="fa-solid fa-puzzle-piece"></i> Tienda Mods';
+    document.getElementById('loading-text').style.display='none';
+    modsDB.forEach(mod => {
+        const el = document.createElement('div'); el.className='version-item';
+        el.innerHTML=`<div style="display:flex;gap:10px;justify-content:center;align-items:center"><i class="fa-solid ${mod.icon}" style="color:var(--p)"></i> ${mod.name}</div>`;
+        el.onclick=()=>{if(confirm(`Instalar ${mod.name}?`)) api('mods/install', {url:mod.url, name:mod.name}); m.style.display='none';};
+        document.getElementById('version-list').appendChild(el);
+    });
+}
+
+// OTHERS
 const createChart = (ctx, color) => new Chart(ctx, { type: 'line', data: { labels: Array(20).fill(''), datasets: [{ data: Array(20).fill(0), borderColor: color, backgroundColor: color+'15', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { x: { display: false }, y: { min: 0, grid: { display: false } } }, plugins: { legend: { display: false } } } });
 const cpuChart = createChart(document.getElementById('cpuChart').getContext('2d'), '#8b5cf6');
 const ramChart = createChart(document.getElementById('ramChart').getContext('2d'), '#3b82f6');
@@ -496,7 +512,9 @@ function setTab(t, btn) { document.querySelectorAll('.tab-content').forEach(e =>
 function api(ep, body) { return fetch('/api/'+ep, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).then(r => r.json()); }
 
 async function loadVersions(type) {
-    const m = document.getElementById('version-modal'); m.style.display='flex'; document.getElementById('version-list').innerHTML=''; document.getElementById('loading-text').style.display='inline';
+    const m = document.getElementById('version-modal'); m.style.display='flex'; document.getElementById('version-list').innerHTML=''; 
+    m.querySelector('h3').innerHTML='<i class="fa-solid fa-cloud"></i> Repositorio';
+    document.getElementById('loading-text').style.display='inline';
     try { allVersions = await api('nebula/versions', { type }); renderVersions(allVersions); } catch(e) { Toastify({text:'API Error', style:{background:'#ef4444'}}).showToast(); }
     document.getElementById('loading-text').style.display='none';
 }
@@ -508,7 +526,7 @@ async function installVersion(v) {
         if(v.type === 'vanilla') { const res = await api('nebula/resolve-vanilla', { url: v.url }); url = res.url; }
         else if (v.type === 'paper') { const r = await fetch(`https://api.papermc.io/v2/projects/paper/versions/${v.id}`); const d = await r.json(); url = `https://api.papermc.io/v2/projects/paper/versions/${v.id}/builds/${d.builds[d.builds.length-1]}/downloads/paper-${v.id}-${d.builds[d.builds.length-1]}.jar`; }
         else if (v.type === 'fabric') { const r = await fetch('https://meta.fabricmc.net/v2/versions/loader'); const d = await r.json(); url = `https://meta.fabricmc.net/v2/versions/loader/${v.id}/${d[0].version}/1.0.0/server/jar`; }
-        else if (v.type === 'forge') { url = `https://maven.minecraftforge.net/net/minecraftforge/forge/${v.id}-${v.id}/forge-${v.id}-${v.id}-universal.jar`; Toastify({text:'Intentando descarga directa...', style:{background:'#f39c12'}}).showToast(); }
+        else if (v.type === 'forge') { url = `https://maven.minecraftforge.net/net/minecraftforge/forge/${v.id}-${v.id}/forge-${v.id}-${v.id}-universal.jar`; }
         if(url) api('install', { url, filename: 'server.jar' });
     } catch(e) { Toastify({text:'Error Link', style:{background:'#ef4444'}}).showToast(); }
 }
