@@ -14,4 +14,4 @@ Panel de gestión ligero para servidores de Minecraft basado en Node.js.
 ## 🚀 Instalación
 Ejecuta este comando en tu servidor Ubuntu/Debian:
 ```bash
-wget [https://raw.githubusercontent.com/reychampi/nebula/main/installserver.sh](https://raw.githubusercontent.com/reychampi/nebula/main/installserver.sh) && chmod +x installserver.sh && ./installserver.sh
+wget https://raw.githubusercontent.com/reychampi/nebula/main/installserver.sh && chmod +x installserver.sh && sudo ./installserver.sh
