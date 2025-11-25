@@ -1,115 +1,75 @@
 #!/bin/bash
 
 # ============================================================
-# NEBULA SMART UPDATER V2 (FIXED)
-# - Estructura de carpetas inteligente
-# - Corrección de permisos
-# - Limpieza de node_modules
+# NEBULA UPDATER - COMPATIBLE CON ESTRUCTURA GITHUB
+# Respeta la carpeta /public existente en el repositorio
 # ============================================================
 
 LOG="/opt/aetherpanel/update.log"
-BACKUP_DIR="/opt/aetherpanel_backup_temp"
 APP_DIR="/opt/aetherpanel"
+BACKUP_DIR="/opt/aetherpanel_backup_temp"
 REPO_ZIP="https://github.com/reychampi/nebula/archive/refs/heads/main.zip"
 
-# Función de log
-log_msg() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> $LOG
-}
+echo "--- UPDATE START $(date) ---" > $LOG
 
-log_msg "--- UPDATE START ---"
-
-# 1. CREAR BACKUP
-log_msg "Creating backup snapshot..."
+# 1. BACKUP DE SEGURIDAD
+# Guardamos lo que tienes ahora por si acaso explota
 rm -rf $BACKUP_DIR
 cp -r $APP_DIR $BACKUP_DIR
 
 # 2. DETENER SERVICIO
-# Intentamos parar cualquier proceso de node o el servicio
+# Paramos el panel para poder sobrescribir archivos en uso
 systemctl stop aetherpanel >> $LOG 2>&1
-pkill -f "node server.js" >> $LOG 2>&1
 
-# 3. DESCARGAR Y PREPARAR
-log_msg "Downloading update..."
+# 3. DESCARGAR Y DESCOMPRIMIR
+echo "Downloading & Unzipping..." >> $LOG
 rm -rf /tmp/nebula_update /tmp/update.zip
 mkdir -p /tmp/nebula_update
-wget -q $REPO_ZIP -O /tmp/update.zip
 
-# 4. DESCOMPRIMIR
-log_msg "Unzipping..."
+# Intentamos wget, si falla usamos curl (robustez)
+wget -q $REPO_ZIP -O /tmp/update.zip || curl -L $REPO_ZIP -o /tmp/update.zip
 unzip -q -o /tmp/update.zip -d /tmp/nebula_update
 
-# 5. DETECCIÓN INTELIGENTE DE LA CARPETA RAÍZ
-# Buscamos la carpeta que contenga el 'server.js' para asegurar que es la correcta
-EXTRACTED_DIR=$(find /tmp/nebula_update -name "server.js" | head -n 1 | xargs dirname)
+# 4. IDENTIFICAR LA RAÍZ DE LA DESCARGA
+# Buscamos dónde quedó el server.js descomprimido para saber la ruta base
+EXTRACTED_ROOT=$(find /tmp/nebula_update -name "server.js" | head -n 1 | xargs dirname)
 
-if [ -z "$EXTRACTED_DIR" ]; then
-    log_msg "🚨 ERROR: No se encontró server.js en la actualización. Abortando."
-    # Restaurar servicio y salir
+if [ -z "$EXTRACTED_ROOT" ]; then
+    echo "🚨 ERROR: Estructura del ZIP inválida. Abortando." >> $LOG
     systemctl start aetherpanel
     exit 1
 fi
 
-log_msg "Valid source found at: $EXTRACTED_DIR"
+# 5. APLICAR ACTUALIZACIÓN (SOBRESCRIBIR)
+echo "Syncing files..." >> $LOG
+# cp -rf copia recursivamente. Esto actualizará 'server.js' en la raíz
+# Y actualizará el contenido de 'public/' dentro de 'public/' automáticamente
+cp -rf "$EXTRACTED_ROOT"/* "$APP_DIR/" >> $LOG 2>&1
 
-# 6. INSTALACIÓN DE ARCHIVOS (Con lógica de 'public')
-log_msg "Applying files..."
+# 6. LIMPIEZA Y PERMISOS (CRÍTICO)
+# Aseguramos que el script sea ejecutable para la próxima vez
+chmod +x $APP_DIR/updater.sh
+# Borramos basura que no necesitamos en prod
+rm -f $APP_DIR/README.md $APP_DIR/.gitignore $APP_DIR/installserver.sh
 
-# Copiamos todo lo de la raíz primero
-cp -rf "$EXTRACTED_DIR"/* "$APP_DIR/" >> $LOG 2>&1
-
-# === CORRECCIÓN CRÍTICA DE PUBLIC ===
-# Si los archivos web quedaron en la raíz, los movemos a public
-mkdir -p "$APP_DIR/public"
-
-if [ -f "$APP_DIR/index.html" ]; then
-    log_msg "Fixing file structure: Moving web files to public/..."
-    mv "$APP_DIR/index.html" "$APP_DIR/public/" 2>/dev/null
-    mv "$APP_DIR/style.css" "$APP_DIR/public/" 2>/dev/null
-    mv "$APP_DIR/app.js" "$APP_DIR/public/" 2>/dev/null
-    mv "$APP_DIR/logo.svg" "$APP_DIR/public/" 2>/dev/null
-    mv "$APP_DIR/logo.ico" "$APP_DIR/public/" 2>/dev/null
-    mv "$APP_DIR/logo.png" "$APP_DIR/public/" 2>/dev/null
-fi
-# ====================================
-
-# 7. LIMPIEZA Y PERMISOS
-log_msg "Cleaning and fixing permissions..."
-rm -f "$APP_DIR/installserver.sh" "$APP_DIR/README.md" "$APP_DIR/.gitignore"
-chmod +x "$APP_DIR/updater.sh"
-
-# 8. INSTALAR DEPENDENCIAS (Limpio)
-cd "$APP_DIR"
-# Borramos node_modules para evitar conflictos de versiones viejas
-rm -rf node_modules
-log_msg "Installing dependencies..."
+# 7. DEPENDENCIAS
+cd $APP_DIR
+# Si el package.json cambió, instalamos lo nuevo.
+# 'npm ci' es mejor para instalaciones limpias, pero 'install' es más seguro si no hay package-lock.
 npm install --production >> $LOG 2>&1
 
-# 9. ARREGLAR DUEÑO DE ARCHIVOS (Importante si no eres root)
-# Asumimos que el usuario actual o root debe ser el dueño, ajusta si usas un usuario 'nebula'
-chown -R root:root "$APP_DIR" 
-chmod -R 755 "$APP_DIR"
+# 8. REINICIAR
+echo "Restarting..." >> $LOG
+systemctl start aetherpanel
 
-# 10. REINICIAR Y VERIFICAR
-log_msg "Starting server..."
-systemctl start aetherpanel >> $LOG 2>&1
-
-sleep 10
-
+sleep 5
 if systemctl is-active --quiet aetherpanel; then
-    log_msg "✅ UPDATE SUCCESSFUL: System is stable."
+    echo "✅ UPDATE SUCCESSFUL" >> $LOG
     rm -rf $BACKUP_DIR
-    # Notificar al socket (opcional, requiere curl local)
 else
-    log_msg "🚨 UPDATE FAILED: System crashed. ROLLING BACK..."
-    
+    echo "🚨 FAILED. Restoring backup..." >> $LOG
     systemctl stop aetherpanel
-    rm -rf $APP_DIR/*
-    cp -r $BACKUP_DIR/* $APP_DIR/
-    chmod +x $APP_DIR/updater.sh
-    cd $APP_DIR
-    npm install --production
+    # Restauramos todo tal cual estaba
+    cp -rf $BACKUP_DIR/* $APP_DIR/
     systemctl start aetherpanel
-    
-    log_msg "✅ ROLLBACK COMPLETED."
 fi
