@@ -6,38 +6,43 @@
 # ============================================================
 
 APP_DIR="/opt/aetherpanel"
-UPDATER_URL="https://raw.githubusercontent.com/reychampi/nebula/main/updater.sh"
+# 1. CAMBIO: URL corregida a aether-panel
+UPDATER_URL="https://raw.githubusercontent.com/reychampi/aether-panel/main/updater.sh"
 
-# 1. VERIFICACIÓN DE ROOT
+# 2. CAMBIO: Variable para definir el usuario manualmente
+SERVICE_USER="root" 
+
+# Verificación de ejecución (debe ser sudo para instalar, aunque el servicio corra como otro usuario)
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ Por favor, ejecuta este script como root (sudo)."
+  echo "❌ Por favor, ejecuta este script como root (sudo) para la instalación inicial."
   exit 1
 fi
 
 echo "🌌 Iniciando instalación de Aether Panel..."
 
-# 2. INSTALACIÓN DE DEPENDENCIAS DEL SISTEMA
-# Actualizamos repositorios e instalamos lo necesario: Java (para MC), Node, Git, Zip
+# INSTALACIÓN DE DEPENDENCIAS
 echo "📦 Instalando dependencias..."
 apt-get update -qq
 apt-get install -y -qq curl wget unzip git default-jre
 
-# Instalar Node.js si no existe (usamos la versión LTS)
 if ! command -v node &> /dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
     apt-get install -y -qq nodejs
 fi
 
-# 3. PREPARACIÓN DE DIRECTORIO
+# PREPARACIÓN DE DIRECTORIO
 mkdir -p "$APP_DIR"
+# Aseguramos permisos si se cambia el usuario
+chown -R $SERVICE_USER:$SERVICE_USER "$APP_DIR"
 
-# 4. DESCARGA DEL UPDATER
+# DESCARGA DEL UPDATER
 echo "⬇️ Descargando el sistema de actualizaciones..."
 curl -H 'Cache-Control: no-cache' -s "$UPDATER_URL" -o "$APP_DIR/updater.sh"
 chmod +x "$APP_DIR/updater.sh"
+chown $SERVICE_USER:$SERVICE_USER "$APP_DIR/updater.sh"
 
-# 5. CREACIÓN DEL SERVICIO SYSTEMD (Para arranque automático)
-echo "⚙️ Configurando servicio del sistema..."
+# CREACIÓN DEL SERVICIO SYSTEMD
+echo "⚙️ Configurando servicio del sistema para usuario: $SERVICE_USER..."
 cat > /etc/systemd/system/aetherpanel.service <<EOF
 [Unit]
 Description=Aether Panel Service
@@ -45,7 +50,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=$SERVICE_USER
 WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
@@ -57,8 +62,13 @@ EOF
 systemctl daemon-reload
 systemctl enable aetherpanel
 
-# 6. EJECUTAR EL UPDATER PARA LA PRIMERA INSTALACIÓN
+# EJECUTAR UPDATER
 echo "🚀 Ejecutando instalación inicial..."
-bash "$APP_DIR/updater.sh"
+# Ejecutamos el updater como el usuario designado para evitar problemas de permisos
+if [ "$SERVICE_USER" == "root" ]; then
+    bash "$APP_DIR/updater.sh"
+else
+    su -c "bash $APP_DIR/updater.sh" $SERVICE_USER
+fi
 
-echo "✅ Instalación completada. Puedes acceder a tu panel."
+echo "✅ Instalación completada. Aether Panel está listo."
