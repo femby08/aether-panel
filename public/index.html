@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,9 @@
     <link rel="icon" href="logo.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <script src="/socket.io/socket.io.js"></script>
@@ -17,16 +20,18 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
 </head>
+
 <body>
     <div class="bg-particles"></div>
-    
+
     <div id="editor-modal" class="modal-overlay" style="display:none">
         <div class="modal glass">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-code"></i> Editor</h3>
                 <div class="modal-actions">
                     <button class="btn btn-ghost" onclick="closeEditor()">Cerrar</button>
-                    <button class="btn btn-primary" onclick="saveFile()"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                    <button class="btn btn-primary" onclick="saveFile()"><i class="fa-solid fa-floppy-disk"></i>
+                        Guardar</button>
                 </div>
             </div>
             <div id="ace-editor"></div>
@@ -37,19 +42,44 @@
         <div class="modal glass version-modal">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-cloud"></i> Repositorio</h3>
-                <button class="btn btn-ghost btn-icon" onclick="document.getElementById('version-modal').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                <button class="btn btn-ghost btn-icon"
+                    onclick="document.getElementById('version-modal').style.display='none'"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="mod-search">
                 <div class="search-wrapper">
                     <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" id="version-search" placeholder="Buscar versión..." class="search-input" autofocus>
+                    <input type="text" id="version-search" placeholder="Buscar versión..." class="search-input"
+                        autofocus>
                 </div>
-                <span id="loading-text" style="display:none;font-size:12px;color:var(--p)"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</span>
+                <span id="loading-text" style="display:none;font-size:12px;color:var(--p)"><i
+                        class="fa-solid fa-spinner fa-spin"></i> Cargando...</span>
             </div>
             <div id="version-list" class="version-grid"></div>
         </div>
     </div>
-    
+
+    <div id="ram-modal" class="modal-overlay" style="display:none">
+        <div class="modal glass ram-modal" style="height:auto;max-width:500px">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-memory"></i> Asignar RAM</h3>
+                <button class="btn btn-ghost btn-icon" onclick="closeRamModal()"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="padding:30px;display:flex;flex-direction:column;gap:20px">
+                <p style="color:var(--muted)">Selecciona la cantidad de RAM para el servidor:</p>
+                <div class="range-wrapper">
+                    <input type="range" id="ram-slider" min="1" max="16" step="0.5" class="ram-range"
+                        oninput="updateRamDisplay(this.value)">
+                    <div class="ram-display"><span id="ram-display-val">4</span> GB</div>
+                </div>
+                <p style="font-size:0.8rem;color:var(--muted)">Disponible en sistema: <span id="sys-ram-total">0</span>
+                    GB</p>
+                <button class="btn btn-primary" onclick="confirmInstall()">INSTALAR SERVIDOR</button>
+            </div>
+        </div>
+    </div>
+
     <div id="update-modal" class="modal-overlay" style="display:none">
         <div class="modal glass update-modal">
             <div class="update-icon-wrapper">
@@ -98,6 +128,10 @@
                 <button onclick="setTab('backups', this)" class="nav-btn">
                     <i class="fa-solid fa-box-archive"></i>
                     <span>Backups</span>
+                </button>
+                <button onclick="setTab('labs', this)" class="nav-btn">
+                    <i class="fa-solid fa-flask"></i>
+                    <span>Labs</span>
                 </button>
                 <button onclick="setTab('config', this)" class="nav-btn">
                     <i class="fa-solid fa-sliders"></i>
@@ -155,6 +189,9 @@
                             <span class="stat-value" id="cpu-val">0%</span>
                         </div>
                         <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+                        <div class="stat-detail">
+                            <span>Frecuencia:</span> <span id="cpu-freq">0 MHz</span>
+                        </div>
                     </div>
                     <div class="card glass">
                         <div class="card-header">
@@ -162,6 +199,9 @@
                             <span class="stat-value" id="ram-val">0 MB</span>
                         </div>
                         <div class="chart-container"><canvas id="ramChart"></canvas></div>
+                        <div class="stat-detail">
+                            <span>Libre:</span> <span id="ram-free">0 MB</span>
+                        </div>
                     </div>
                     <div class="card glass">
                         <div class="card-header">
@@ -172,11 +212,8 @@
                             <div class="disk-fill" id="disk-fill"></div>
                         </div>
                     </div>
+                    <div id="terminal"></div>
                 </div>
-            </div>
-            
-            <div id="tab-console" class="tab-content">
-                <div class="console-box glass"><div id="terminal"></div></div>
             </div>
 
             <div id="tab-files" class="tab-content">
@@ -197,7 +234,7 @@
                     <div id="file-list" class="file-list"></div>
                 </div>
             </div>
-            
+
             <div id="tab-versions" class="tab-content">
                 <h2 class="tab-title">Núcleos Disponibles</h2>
                 <div class="versions-container">
@@ -243,7 +280,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div id="tab-backups" class="tab-content">
                 <div class="card glass full">
                     <div class="card-header">
@@ -255,16 +292,83 @@
                     <div id="backup-list" class="file-list"></div>
                 </div>
             </div>
-            
+
+            <div id="tab-labs" class="tab-content">
+                <h2 class="tab-title">Nebula Labs <span class="badge badge-warning">Experimental</span></h2>
+                <p style="color:var(--muted);margin-bottom:20px">Funciones avanzadas en desarrollo. Úsalas bajo tu
+                    propio riesgo.</p>
+                <div class="labs-grid">
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-bolt"></i> Turbo Mode</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="lab-turbo">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="lab-desc">Prioriza el proceso de Java en el sistema operativo para mejorar el
+                            rendimiento.</p>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-bug"></i> Debug Verbose</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="lab-debug">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="lab-desc">Muestra logs detallados de la JVM y argumentos de inicio en la consola.</p>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-broom"></i> Auto-GC</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="lab-gc">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <p class="lab-desc">Fuerza la recolección de basura cada 30 minutos (No recomendado para
+                            servidores grandes).</p>
+                    </div>
+                </div>
+            </div>
+
             <div id="tab-config" class="tab-content">
                 <div class="card glass full">
                     <div class="card-header">
                         <h3><i class="fa-solid fa-gear"></i> Configuración</h3>
-                        <button onclick="saveCfg()" class="btn btn-primary">
+                        <button onclick="saveNebulaConfig()" class="btn btn-primary">
                             <i class="fa-solid fa-floppy-disk"></i> Guardar
                         </button>
                     </div>
+
+                    <h4 style="margin-bottom:15px;color:var(--p-light)">Personalización</h4>
+                    <div class="cfg-grid">
+                        <div>
+                            <label class="cfg-label">Nombre del Servidor</label>
+                            <input type="text" id="cfg-name" class="cfg-in" placeholder="Nebula Dashboard">
+                        </div>
+                        <div>
+                            <label class="cfg-label">Color del Tema</label>
+                            <div style="display:flex;gap:10px;align-items:center">
+                                <input type="color" id="cfg-color" class="cfg-color" value="#8b5cf6">
+                                <span id="color-val"
+                                    style="font-family:'JetBrains Mono';color:var(--muted)">#8b5cf6</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="cfg-label">Partículas de Fondo</label>
+                            <label class="switch">
+                                <input type="checkbox" id="cfg-particles">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-bottom:15px;color:var(--p-light);margin-top:20px">Propiedades del Servidor
+                        (server.properties)</h4>
                     <div id="cfg-list" class="cfg-grid"></div>
+
                     <div class="config-footer">
                         <button onclick="checkUpdate()" class="btn btn-update">
                             <i class="fa-solid fa-rotate"></i>
@@ -277,4 +381,5 @@
     </div>
     <script src="app.js"></script>
 </body>
+
 </html>
