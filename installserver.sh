@@ -2,47 +2,53 @@
 
 # ============================================================
 # AETHER PANEL - INSTALLER (Bootstrapper)
-# Instala dependencias y delega la descarga al Updater
 # ============================================================
 
 APP_DIR="/opt/aetherpanel"
-# 1. CAMBIO: URL corregida a aether-panel
 UPDATER_URL="https://raw.githubusercontent.com/reychampi/aether-panel/main/updater.sh"
-
-# 2. CAMBIO: Variable para definir el usuario manualmente
 SERVICE_USER="root" 
 
-# Verificación de ejecución (debe ser sudo para instalar, aunque el servicio corra como otro usuario)
+# Verificación de root
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ Por favor, ejecuta este script como root (sudo) para la instalación inicial."
+  echo "❌ Por favor, ejecuta este script como root (sudo)."
   exit 1
 fi
 
 echo "🌌 Iniciando instalación de Aether Panel..."
 
-# INSTALACIÓN DE DEPENDENCIAS
-echo "📦 Instalando dependencias..."
+# 1. Dependencias
+echo "📦 Instalando dependencias del sistema..."
 apt-get update -qq
 apt-get install -y -qq curl wget unzip git default-jre
 
+# Node.js Check
 if ! command -v node &> /dev/null; then
+    echo "📦 Instalando Node.js..."
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
     apt-get install -y -qq nodejs
 fi
 
-# PREPARACIÓN DE DIRECTORIO
-mkdir -p "$APP_DIR"
-# Aseguramos permisos si se cambia el usuario
+# 2. Preparar Directorios
+mkdir -p "$APP_DIR/public"
 chown -R $SERVICE_USER:$SERVICE_USER "$APP_DIR"
 
-# DESCARGA DEL UPDATER
-echo "⬇️ Descargando el sistema de actualizaciones..."
+# 3. DESCARGA DE ASSETS (LOGOS) - NUEVO
+echo "🎨 Descargando recursos gráficos..."
+curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg" -o "$APP_DIR/public/logo.svg"
+curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.ico" -o "$APP_DIR/public/logo.ico"
+
+# Asegurar permisos de los logos
+chown $SERVICE_USER:$SERVICE_USER "$APP_DIR/public/logo.svg"
+chown $SERVICE_USER:$SERVICE_USER "$APP_DIR/public/logo.ico"
+
+# 4. Descargar Updater
+echo "⬇️ Descargando sistema de actualizaciones..."
 curl -H 'Cache-Control: no-cache' -s "$UPDATER_URL" -o "$APP_DIR/updater.sh"
 chmod +x "$APP_DIR/updater.sh"
 chown $SERVICE_USER:$SERVICE_USER "$APP_DIR/updater.sh"
 
-# CREACIÓN DEL SERVICIO SYSTEMD
-echo "⚙️ Configurando servicio del sistema para usuario: $SERVICE_USER..."
+# 5. Servicio SystemD
+echo "⚙️ Configurando servicio..."
 cat > /etc/systemd/system/aetherpanel.service <<EOF
 [Unit]
 Description=Aether Panel Service
@@ -62,9 +68,8 @@ EOF
 systemctl daemon-reload
 systemctl enable aetherpanel
 
-# EJECUTAR UPDATER
-echo "🚀 Ejecutando instalación inicial..."
-# Ejecutamos el updater como el usuario designado para evitar problemas de permisos
+# 6. Ejecutar instalación final
+echo "🚀 Ejecutando instalación del núcleo..."
 if [ "$SERVICE_USER" == "root" ]; then
     bash "$APP_DIR/updater.sh"
 else
