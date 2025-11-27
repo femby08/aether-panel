@@ -96,13 +96,11 @@ El instalador automático se encargará de:
 El panel no carga en el navegador Asegúrate de abrir el puerto 3000 en tu firewall:
 
     Ubuntu/Debian:
-    Bash
 <pre>
 sudo ufw allow 3000/tcp
 </pre>
 
 Fedora/CentOS:
-Bash
 <pre>
     sudo firewall-cmd --permanent --add-port=3000/tcp
     sudo firewall-cmd --reload
