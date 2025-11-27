@@ -55,7 +55,7 @@ Esta versión introduce mejoras masivas en la Calidad de Vida (QoL).
 Accede a tu terminal como usuario `root` y ejecuta el siguiente comando:
 
 ```bash
-curl -sL [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh) | bash
+curl -sL [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh) | bash```
 
 El instalador automático se encargará de:
 
