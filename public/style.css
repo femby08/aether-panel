@@ -285,13 +285,15 @@ input:checked + .slider:before { transform: translateX(24px); background-color: 
 @keyframes moveParticles { 0% { background-position: 0 0; } 100% { background-position: 100px 100px; } }
 
 /* LABS SECTION */
-.labs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; align-items: start; }
+.labs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; align-items: stretch; }
 .lab-card-dns { grid-column: 1 / -1; }
-.lab-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin-top: 12px; }
+.lab-card { min-height: 200px; display: flex; flex-direction: column; }
+.lab-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin-top: 12px; flex: 1; }
 
 /* RAM Modal Fix */
 .range-wrapper { display: flex; align-items: center; gap: 20px; }
 .ram-range { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; background: var(--glass-hover); border-radius: 5px; outline: none; }
 .ram-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--p); border: 2px solid white; cursor: pointer; }
 .ram-display { font-size: 1.5rem; font-weight: 800; color: var(--p-light); min-width: 80px; text-align: right; }
+
 
