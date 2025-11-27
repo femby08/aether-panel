@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aether Panel</title>
-    <link rel="icon" href="/logo.ico" type="image/x-icon">
+    <link rel="icon" href="logo.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -90,7 +90,6 @@
                 <div class="nav-label">CORE</div>
                 <button onclick="setTab('stats', this)" class="nav-btn active"><i class="fa-solid fa-chart-simple"></i><span>Monitor</span></button>
                 <button onclick="setTab('console', this)" class="nav-btn"><i class="fa-solid fa-terminal"></i><span>Consola</span></button>
-                
                 <div class="nav-label">DATA</div>
                 <button onclick="setTab('files', this)" class="nav-btn"><i class="fa-solid fa-folder-tree"></i><span>Archivos</span></button>
                 <button onclick="setTab('versions', this)" class="nav-btn"><i class="fa-solid fa-layer-group"></i><span>Núcleos</span></button>
@@ -146,7 +145,7 @@
                         <div class="disk-bar"><div class="disk-fill" id="disk-fill"></div></div>
                     </div>
                 </div>
-                </div>
+            </div>
 
             <div id="tab-console" class="tab-content">
                 <div class="console-box">
@@ -220,7 +219,7 @@
                 <div class="card glass full">
                     <div class="card-header">
                         <h3><i class="fa-solid fa-gear"></i> Configuración</h3>
-                        <button onclick="saveNebulaConfig()" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                        <button onclick="saveCfg()" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
                     </div>
 
                     <h4 style="margin-bottom:15px;color:var(--p-light)">Personalización</h4>
@@ -245,6 +244,7 @@
                     </div>
 
                     <h4 style="margin-bottom:15px;color:var(--p-light);margin-top:20px">Propiedades (server.properties)</h4>
+                    
                     <div id="cfg-list" class="cfg-grid"></div>
 
                     <div class="config-footer">
@@ -257,6 +257,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-
-
-
