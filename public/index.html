@@ -78,13 +78,34 @@
         </div>
     </div>
 
+    <div id="force-ui-modal" class="modal-overlay" style="display:none; z-index: 200;">
+        <div class="modal glass update-modal">
+            <div class="update-icon-wrapper" style="color: var(--p-light); animation: none;">
+                <i class="fa-solid fa-paintbrush"></i>
+            </div>
+            <h3>Actualizar Interfaz Gráfica</h3>
+            <p style="color:var(--muted); margin-bottom:25px; line-height: 1.6; font-size: 0.9rem;">
+                ¿Estás seguro de que quieres forzar la recarga de la interfaz?<br>
+                Se descargarán las últimas versiones de <b>HTML, CSS y JS</b> desde GitHub.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                <button onclick="confirmForceUI()" class="btn" style="background: var(--p); color: white; justify-content: center; padding: 16px;">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> CONFIRMAR Y ACTUALIZAR
+                </button>
+                <button onclick="document.getElementById('force-ui-modal').style.display='none'" class="btn btn-ghost" style="justify-content: center;">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="app-layout">
         
         <aside class="sidebar">
             <div class="brand">
                 <div class="brand-logo"><img src="/logo.svg" alt="Logo" style="width:24px;height:24px"></div>
                 <div class="brand-text">
-                    <span class="version-badge" id="sidebar-version-text">V1.5.0</span>
+                    <span class="version-badge" id="sidebar-version-text">V1.5.1</span>
                     <span class="brand-name">AETHER</span>
                 </div>
             </div>
@@ -120,7 +141,7 @@
                     <div style="display:flex; align-items:center; gap:15px;">
                         <h1>Aether Panel</h1>
                         <div class="badges">
-                            <span class="badge badge-primary" id="header-version">V1.5.0</span>
+                            <span class="badge badge-primary" id="header-version">V1.5.1</span>
                             <span class="badge badge-success">Stable</span>
                         </div>
                     </div>
@@ -263,8 +284,6 @@
                     </div>
 
                     <h4 style="margin-bottom:15px;color:var(--p-light);margin-top:20px">Propiedades (server.properties)</h4>
-                    <div id="cfg-list" class="cfg-grid"></div>
-
                     <div id="cfg-list" class="cfg-grid"></div>
 
                     <div class="config-footer" style="gap: 20px;">
