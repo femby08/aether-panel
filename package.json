@@ -1,7 +1,7 @@
 {
   "name": "aetherpanel-nebula",
-  "version": "1.4.0",
-  "description": "Nebula V1.4.0",
+  "version": "1.4.1",
+  "description": "Nebula V1.4.1",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -16,4 +16,5 @@
     "unzipper": "^0.10.14"
   }
 }
+
 
