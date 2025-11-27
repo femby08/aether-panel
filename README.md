@@ -64,7 +64,7 @@ Esta versión consolida todas las mejoras de estabilidad y visualización.
 Accede a tu terminal como usuario `root` y ejecuta el siguiente comando mágico:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh)
+curl -sL https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh | bash
 ````
 
 El instalador automático se encargará de:
