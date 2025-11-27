@@ -16,10 +16,10 @@ fi
 
 echo "🌌 Iniciando instalación de Aether Panel..."
 
-# 1. Dependencias
+# 1. Dependencias (AHORA INCLUYE RSYNC)
 echo "📦 Instalando dependencias del sistema..."
 apt-get update -qq
-apt-get install -y -qq curl wget unzip git default-jre
+apt-get install -y -qq curl wget unzip git rsync default-jre
 
 # Node.js Check
 if ! command -v node &> /dev/null; then
@@ -32,7 +32,7 @@ fi
 mkdir -p "$APP_DIR/public"
 chown -R $SERVICE_USER:$SERVICE_USER "$APP_DIR"
 
-# 3. DESCARGA DE ASSETS (LOGOS) - NUEVO
+# 3. DESCARGA DE ASSETS (LOGOS)
 echo "🎨 Descargando recursos gráficos..."
 curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg" -o "$APP_DIR/public/logo.svg"
 curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.ico" -o "$APP_DIR/public/logo.ico"
