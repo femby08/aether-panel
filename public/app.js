@@ -2,20 +2,19 @@ const socket = io();
 let currentPath = '', currentFile = '', allVersions = [];
 let currentStoreMode = 'versions';
 
-// --- 1. INFO & INICIO ---
+// --- 1. INFO ---
 fetch('/api/info').then(r => r.json()).then(d => {
     document.getElementById('sidebar-version-text').innerText = 'V' + d.version;
     document.getElementById('header-version').innerText = 'V' + d.version;
 });
 
-// Cargar IP/Dominio en Header
+// Cargar IP en Header
 fetch('/api/network').then(r => r.json()).then(d => {
     const ipElem = document.getElementById('server-ip-display');
-    // Si hay custom_domain, lo usamos; si no, usamos la IP detectada
     const displayValue = d.custom_domain ? `${d.custom_domain}:${d.port}` : `${d.ip}:${d.port}`;
     if(ipElem) {
         ipElem.innerText = displayValue;
-        ipElem.dataset.fullIp = displayValue; // Guardamos el valor para copiar
+        ipElem.dataset.fullIp = displayValue;
     }
 });
 function copyIP() {
@@ -45,15 +44,26 @@ function updateThemeUI(mode) {
 }
 updateThemeUI(localStorage.getItem('theme') || 'dark');
 
-// --- 4. CONSOLA INTERACTIVA ---
-const term = new Terminal({ fontFamily: 'JetBrains Mono', theme: { background: '#00000000' }, fontSize: 13, cursorBlink: true });
+// --- 4. CONSOLA INTERACTIVA (FIXED) ---
+const term = new Terminal({ 
+    fontFamily: 'JetBrains Mono', 
+    theme: { background: '#00000000' }, 
+    fontSize: 13, 
+    cursorBlink: true,
+    convertEol: true // <-- FIX
+}); 
 const fitAddon = new FitAddon.FitAddon(); term.loadAddon(fitAddon); term.open(document.getElementById('terminal'));
 term.writeln('\x1b[1;35m>>> AETHER PANEL V1.5.1 READY.\x1b[0m\r\n');
+
 window.onresize = () => { if (document.getElementById('tab-console').classList.contains('active')) fitAddon.fit(); };
 term.onData(d => socket.emit('command', d));
 socket.on('console_data', d => term.write(d));
 socket.on('logs_history', d => { term.write(d); setTimeout(() => fitAddon.fit(), 200); });
-function sendConsoleCommand() { const i = document.getElementById('console-input'); if (i && i.value.trim()) { socket.emit('command', i.value); i.value = ''; } }
+
+function sendConsoleCommand() {
+    const input = document.getElementById('console-input');
+    if (input && input.value.trim()) { socket.emit('command', input.value); input.value = ''; }
+}
 
 // --- 5. TIENDA DE MODS & BÚSQUEDA ---
 const modsDB = [
@@ -121,7 +131,7 @@ async function installVersion(v) {
     pendingInstall = v; document.getElementById('version-modal').style.display = 'none';
     try {
         const s = await fetch('/api/stats').then(r => r.json());
-        const m = Math.floor(s.ram_total / 1073741824); // Convert Bytes to GB
+        const m = Math.floor(s.ram_total / 1073741824);
         const slider = document.getElementById('ram-slider');
         if(slider) { slider.max = m; slider.value = Math.min(4, m); }
         const sysRam = document.getElementById('sys-ram-total');
@@ -148,7 +158,7 @@ async function confirmInstall() {
 }
 
 // --- MONITOR & CHARTS ---
-const createChart = (ctx, color, maxVal = 100) => new Chart(ctx, { type: 'line', data: { labels: Array(20).fill(''), datasets: [{ data: Array(20).fill(0), borderColor: color, backgroundColor: color + '15', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { x: { display: false }, y: { min: 0, max: maxVal, grid: { display: false, drawBorder: false }, ticks: { display: false } } }, plugins: { legend: { display: false }, tooltip: { enabled: false } } } });
+const createChart = (ctx, color, maxVal = 100) => new Chart(ctx, { type: 'line', data: { labels: Array(20).fill(''), datasets: [{ data: Array(20).fill(0), borderColor: color, backgroundColor: color + '15', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 0 }, scales: { x: { display: false }, y: { min: 0, max: maxVal, grid: { display: false, ticks: { display: false } } }, plugins: { legend: { display: false }, tooltip: { enabled: false } } } } });
 const cpuChart = createChart(document.getElementById('cpuChart').getContext('2d'), '#8b5cf6', 100);
 const ramChart = createChart(document.getElementById('ramChart').getContext('2d'), '#3b82f6', null);
 
@@ -187,7 +197,7 @@ function setTab(t, btn) {
 }
 function api(ep, body) { return fetch('/api/' + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json()); }
 
-// --- FILE MANAGER, BACKUPS ---
+// --- FILE MANAGER, BACKUPS, CONFIG ---
 function loadFileBrowser(p){ currentPath=p; document.getElementById('file-breadcrumb').innerText='/root'+(p?'/'+p:''); api('files?path='+encodeURIComponent(p)).then(fs=>{ const l=document.getElementById('file-list'); l.innerHTML=''; if(p){ const b=document.createElement('div'); b.className='file-row'; b.innerHTML='<span>..</span>'; b.onclick=()=>{ const a=p.split('/'); a.pop(); loadFileBrowser(a.join('/')) }; l.appendChild(b) } fs.forEach(f=>{ const e=document.createElement('div'); e.className='file-row'; e.innerHTML=`<span><i class="fa-solid ${f.isDir?'fa-folder':'fa-file'}"></i> ${f.name}</span><span>${f.size}</span>`; if(f.isDir)e.onclick=()=>loadFileBrowser((p?p+'/':'')+f.name); else e.onclick=()=>openEditor((p?p+'/':'')+f.name); l.appendChild(e) }) }) }
 function uploadFile(){ const i=document.createElement('input'); i.type='file'; i.onchange=(e)=>{const f=new FormData();f.append('file',e.target.files[0]);fetch('/api/files/upload',{method:'POST',body:f}).then(r=>r.json()).then(d=>{if(d.success)loadFileBrowser(currentPath)})}; i.click() }
 const ed=ace.edit("ace-editor"); ed.setTheme("ace/theme/dracula"); ed.setOptions({fontSize:"14px"});
@@ -218,7 +228,6 @@ function loadCfg() {
         } 
     }).catch(e => console.error(e));
     
-    // Cargar Dominio Local (Desde /api/settings GET)
     fetch('/api/settings').then(r => r.json()).then(settings => {
         const domainInput = document.getElementById('cfg-custom-domain');
         if (domainInput) { domainInput.value = settings.custom_domain || ''; }
@@ -231,20 +240,15 @@ function saveCfg() {
     document.querySelectorAll('.cfg-bool').forEach(i => d[i.dataset.k] = i.checked ? 'true' : 'false');
     api('config', d); 
 
-    // Guardar Dominio Local
-    const domain = document.getElementById('cfg-custom-domain').value;
-    // Asumo que tienes un input para RAM en el config que se guarda junto
-    const ram = document.getElementById('ram-select') ? document.getElementById('ram-select').value : null; 
-    
+    const domain = document.getElementById('cfg-custom-domain').value || null;
+    const ram = document.getElementById('ram-slider').value; // Asumimos que se usa el slider
     api('settings', { custom_domain: domain, ram: ram }); 
     
     // Actualizar header IP para reflejar el cambio
     const ipDisplay = document.getElementById('server-ip-display');
     if (ipDisplay) {
         const port = ipDisplay.dataset.fullIp.split(':')[1];
-        const currentIP = ipDisplay.dataset.fullIp.split(':')[0];
-        
-        const newDisplay = domain ? `${domain}:${port}` : `${currentIP}:${port}`;
+        const newDisplay = domain ? `${domain}:${port}` : `${ipDisplay.dataset.fullIp.split(':')[0]}:${port}`;
 
         ipDisplay.innerText = newDisplay;
         ipDisplay.dataset.fullIp = newDisplay;
@@ -264,11 +268,21 @@ function checkUpdate(isAuto = false) {
 }
 function showUpdateModal(d) {
     const m = document.getElementById('update-modal');
-    // ... (rest of function)
+    if(!m) return;
+    const t = document.getElementById('update-text');
+    const a = document.getElementById('up-actions');
+    const ti = document.getElementById('up-title');
+    if (d.type === 'hard') {
+        ti.innerText = "Actualización Mayor";
+        t.innerText = `Versión local: ${d.local}\nNueva versión: ${d.remote}\n\nSe requiere reinicio.`;
+        a.innerHTML = `<button onclick="doUpdate('hard')" class="btn btn-primary">ACTUALIZAR</button><button onclick="document.getElementById('update-modal').style.display='none'" class="btn btn-ghost">Cancelar</button>`;
+        m.style.display = 'flex';
+    }
 }
 function doUpdate(type) {
-    // ... (rest of function)
+    document.getElementById('update-modal').style.display = 'none';
+    fetch('/api/update/perform', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type }) }).then(r => r.json()).then(d => {
+        if (d.mode === 'soft') { Toastify({ text: 'Aplicado.', style: { background: '#10b980' } }).showToast(); setTimeout(() => location.reload(), 1500); }
+        if (d.mode === 'hard') { Toastify({ text: 'Reiniciando...', style: { background: '#f59e0b' } }).showToast(); setTimeout(() => location.reload(), 8000); }
+    });
 }
-// --- FORCE UI ---
-function forceUIUpdate(){ document.getElementById('force-ui-modal').style.display='flex'; }
-function confirmForceUI(){ document.getElementById('force-ui-modal').style.display='none'; Toastify({text:'Descargando...',style:{background:'#8b5cf6'}}).showToast(); fetch('/api/update/perform',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'soft'})}).then(r=>r.json()).then(d=>{ if(d.success){Toastify({text:'¡Actualizado!',style:{background:'#10b981'}}).showToast();setTimeout(()=>location.reload(),1500)} }); }
