@@ -114,7 +114,4 @@ sed -i 's/\r$//' *.sh
 **Desarrollado con ❤️ por ReyChampi**
 [Reportar un Bug](https://www.google.com/search?q=https://github.com/reychampi/aether-panel/issues)
 
-\</div\>
-
-```
-```
+</div\>
