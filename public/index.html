@@ -105,7 +105,7 @@
             <div class="brand">
                 <div class="brand-logo"><img src="/logo.svg" alt="Logo" style="width:24px;height:24px"></div>
                 <div class="brand-text">
-                    <span class="version-badge" id="sidebar-version-text">V1.5.1</span>
+                    <span class="version-badge" id="sidebar-version-text">V1.5.2</span>
                     <span class="brand-name">AETHER</span>
                 </div>
             </div>
@@ -115,10 +115,10 @@
                 <button onclick="setTab('console', this)" class="nav-btn"><i class="fa-solid fa-terminal"></i><span>Consola</span></button>
                 
                 <div class="nav-label">DATA</div>
-                <button onclick="setTab('files', this)" class="nav-btn"><i class="fa-solid fa-folder-tree"></i><span>Archivos</span></button>
                 <button onclick="setTab('versions', this)" class="nav-btn"><i class="fa-solid fa-layer-group"></i><span>Núcleos</span></button>
-                <button onclick="openModStore()" class="nav-btn"><i class="fa-solid fa-puzzle-piece"></i><span>Mods</span></button>
                 <button onclick="setTab('backups', this)" class="nav-btn"><i class="fa-solid fa-box-archive"></i><span>Backups</span></button>
+                
+                <div class="nav-label">SYSTEM</div>
                 <button onclick="setTab('labs', this)" class="nav-btn"><i class="fa-solid fa-flask"></i><span>Labs</span></button>
                 <button onclick="setTab('config', this)" class="nav-btn"><i class="fa-solid fa-sliders"></i><span>Ajustes</span></button>
             </nav>
@@ -141,7 +141,7 @@
                     <div style="display:flex; align-items:center; gap:15px;">
                         <h1>Aether Panel</h1>
                         <div class="badges">
-                            <span class="badge badge-primary" id="header-version">V1.5.1</span>
+                            <span class="badge badge-primary" id="header-version">V1.5.2</span>
                             <span class="badge badge-success">Stable</span>
                         </div>
                     </div>
@@ -184,9 +184,7 @@
                     <div style="padding-bottom:10px; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted); display:flex; justify-content:space-between; align-items:center; font-size:0.9rem;">
                         <span><i class="fa-solid fa-terminal" style="color:var(--p)"></i> TERMINAL EN VIVO</span>
                     </div>
-                    
                     <div id="terminal" style="flex:1; min-height:0;"></div>
-                    
                     <div class="search-wrapper" style="margin-top:10px;">
                         <i class="fa-solid fa-chevron-right search-icon" style="color:var(--p)"></i>
                         <input type="text" id="console-input" placeholder="Escribe un comando..." class="search-input" 
@@ -243,7 +241,8 @@
 
             <div id="tab-labs" class="tab-content">
                 <h2 class="tab-title" style="margin-bottom:10px;font-weight:700">Aether Labs <span class="badge badge-warning">Experimental</span></h2>
-                <p style="color:var(--muted);margin-bottom:20px">Funciones avanzadas. Úsalas bajo tu propio riesgo.</p>
+                <p style="color:var(--muted);margin-bottom:20px">Funciones en desarrollo. Úsalas con precaución.</p>
+                
                 <div class="labs-grid">
                     <div class="card glass">
                         <div class="card-header">
@@ -251,6 +250,28 @@
                             <label class="switch"><input type="checkbox" id="lab-turbo"><span class="slider round"></span></label>
                         </div>
                         <p class="lab-desc">Prioriza el proceso de Java para mejorar el rendimiento.</p>
+                    </div>
+
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-folder-tree"></i> Gestor de Archivos</h3>
+                            <span class="badge badge-warning" style="font-size:0.6rem">BETA</span>
+                        </div>
+                        <p class="lab-desc">Explorador de archivos avanzado. Permite editar configs manualmente.</p>
+                        <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="setTab('files')">
+                            Abrir Gestor
+                        </button>
+                    </div>
+
+                    <div class="card glass">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-puzzle-piece"></i> Tienda de Mods</h3>
+                            <span class="badge badge-danger" style="font-size:0.6rem">ALPHA</span>
+                        </div>
+                        <p class="lab-desc">Instalador automático de mods populares. Puede contener errores.</p>
+                        <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="openModStore()">
+                            Abrir Tienda
+                        </button>
                     </div>
                 </div>
             </div>
@@ -287,15 +308,8 @@
                     <div id="cfg-list" class="cfg-grid"></div>
 
                     <div class="config-footer" style="gap: 20px;">
-                        <button onclick="checkUpdate()" class="btn btn-update">
-                            <i class="fa-solid fa-rotate"></i>
-                            <span>BUSCAR ACTUALIZACIONES</span>
-                        </button>
-
-                        <button onclick="forceUIUpdate()" class="btn btn-update" style="border-color: var(--p-light); color: var(--p-light);">
-                            <i class="fa-solid fa-paintbrush"></i>
-                            <span>ACTUALIZAR UI (GRÁFICA)</span>
-                        </button>
+                        <button onclick="checkUpdate()" class="btn btn-update"><i class="fa-solid fa-rotate"></i><span>BUSCAR ACTUALIZACIONES</span></button>
+                        <button onclick="forceUIUpdate()" class="btn btn-update" style="border-color: var(--p-light); color: var(--p-light);"><i class="fa-solid fa-paintbrush"></i><span>ACTUALIZAR UI (GRÁFICA)</span></button>
                     </div>
                 </div>
             </div>
