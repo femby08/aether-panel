@@ -241,11 +241,24 @@
                 </div>
             </div>
 
-             <div id="tab-labs" class="tab-content">
+            <div id="tab-labs" class="tab-content">
                 <h2 class="tab-title" style="margin-bottom:10px;font-weight:700">Aether Labs <span class="badge badge-warning">Experimental</span></h2>
-                <p style="color:var(--muted);margin-bottom:30px">Funciones en desarrollo. Úsalas con precaución.</p>
+                <p style="color:var(--muted);margin-bottom:20px">Funciones en desarrollo. Úsalas con precaución.</p>
                 
-                <div class="labs-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+                <div class="labs-grid">
+                    
+                    <div class="lab-card glass" style="grid-column: 1 / -1;">
+                        <div class="lab-header">
+                            <h3><i class="fa-solid fa-globe"></i> Dominio Local (DNS)</h3>
+                            <button onclick="saveCfg()" class="btn btn-primary btn-sm">Guardar</button>
+                        </div>
+                        <p class="lab-desc">Define un nombre de dominio (ej: mc.local) para acceder al panel y al servidor, ignorando los cambios de IP de Adaptador Puente. **Requiere configurar el archivo Hosts.**</p>
+                        <div style="margin-top: 15px;">
+                            <label class="cfg-label" style="font-weight:600; font-size: 0.9em;">Dominio Preferido</label>
+                            <input type="text" id="cfg-custom-domain" class="cfg-in" placeholder="ej: panel.local" style="width: 100%;">
+                        </div>
+                    </div>
+                    
                     <div class="card glass">
                         <div class="card-header">
                             <h3><i class="fa-solid fa-bolt"></i> Turbo Mode</h3>
@@ -320,4 +333,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-
