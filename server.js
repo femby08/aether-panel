@@ -36,7 +36,6 @@ const apiClient = axios.create({ headers: { 'User-Agent': 'Aether-Panel/1.4.3' }
 const REPO_RAW = 'https://raw.githubusercontent.com/reychampi/aether-panel/main';
 
 // --- UTILIDADES ---
-// Fallback para calcular tamaño de carpetas si 'du' falla
 const getDirSize = (dirPath) => {
     let size = 0;
     try {
@@ -67,16 +66,41 @@ app.get('/api/info', (req, res) => {
     }
 });
 
-// --- SISTEMA DE ACTUALIZACIONES ---
+// --- SISTEMA DE ACTUALIZACIONES (SOFT UPDATES ACTIVADAS) ---
 app.get('/api/update/check', async (req, res) => {
     try {
         const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+        // Timestamp para evitar caché
         const remotePkg = (await apiClient.get(`${REPO_RAW}/package.json?t=${Date.now()}`)).data;
         
+        // 1. Hard Update (Cambio de versión numérica)
         if (remotePkg.version !== localPkg.version) {
             return res.json({ type: 'hard', local: localPkg.version, remote: remotePkg.version });
         }
+
+        // 2. Soft Update (Cambios visuales en /public)
+        // Comparamos el contenido real de los archivos
+        const files = ['public/index.html', 'public/style.css', 'public/app.js'];
+        let hasChanges = false;
+        
+        for (const f of files) {
+            try {
+                const remoteContent = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
+                const localPath = path.join(__dirname, f);
+                if (fs.existsSync(localPath)) {
+                    const localContent = fs.readFileSync(localPath, 'utf8');
+                    // Si el contenido es diferente, hay actualización visual
+                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) {
+                        hasChanges = true; 
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (hasChanges) return res.json({ type: 'soft', local: localPkg.version, remote: remotePkg.version });
         res.json({ type: 'none' });
+
     } catch (e) {
         res.json({ type: 'error' });
     }
@@ -84,15 +108,32 @@ app.get('/api/update/check', async (req, res) => {
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
+    
+    // HARD UPDATE: Llama al updater.sh y reinicia servicio
     if (type === 'hard') {
         io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización segura...' });
         const updater = spawn('bash', ['/opt/aetherpanel/updater.sh'], { detached: true, stdio: 'ignore' });
         updater.unref();
         res.json({ success: true, mode: 'hard' });
-        // Dar tiempo a responder antes de morir
         setTimeout(() => process.exit(0), 1000);
-    } else {
-        res.json({ success: true, mode: 'soft' });
+    } 
+    // SOFT UPDATE: Sobrescribe archivos visuales en caliente
+    else if (type === 'soft') {
+        io.emit('toast', { type: 'info', msg: '🎨 Actualizando visuales...' });
+        try {
+            const files = ['public/index.html', 'public/style.css', 'public/app.js'];
+            for (const f of files) {
+                const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
+                fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
+            }
+            // Bajamos logos también por si acaso
+            exec(`wget -q -O /opt/aetherpanel/public/logo.svg ${REPO_RAW}/public/logo.svg`);
+            exec(`wget -q -O /opt/aetherpanel/public/logo.ico ${REPO_RAW}/public/logo.ico`);
+            
+            res.json({ success: true, mode: 'soft' });
+        } catch (e) { 
+            res.status(500).json({ error: e.message }); 
+        }
     }
 });
 
@@ -170,12 +211,8 @@ app.post('/api/nebula/resolve-forge', async (req, res) => {
     try {
         const version = req.body.version;
         const promos = (await apiClient.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json')).data.promos;
-        
-        // Buscar build recomendada o latest
         let forgeBuild = promos[`${version}-recommended`] || promos[`${version}-latest`];
-        
         if (!forgeBuild) throw new Error("Versión no encontrada");
-
         const url = `https://maven.minecraftforge.net/net/minecraftforge/forge/${version}-${forgeBuild}/forge-${version}-${forgeBuild}-installer.jar`;
         res.json({ url });
     } catch (e) {
@@ -207,16 +244,15 @@ app.post('/api/mods/install', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- MONITOR Y ESTADO (Optimizado) ---
+// --- MONITOR Y ESTADO ---
 app.get('/api/stats', (req, res) => {
     osUtils.cpuUsage((cpuPercent) => {
-        // Usar comando nativo 'du' para cálculo preciso del disco
         exec(`du -sb ${SERVER_DIR}`, (error, stdout) => {
             let diskBytes = 0;
             if (!error && stdout) {
                 diskBytes = parseInt(stdout.split(/\s+/)[0]);
             } else {
-                diskBytes = getDirSize(SERVER_DIR); // Fallback
+                diskBytes = getDirSize(SERVER_DIR);
             }
 
             const cpus = os.cpus();
@@ -231,7 +267,7 @@ app.get('/api/stats', (req, res) => {
                 ram_free: freeMem,
                 ram_used: totalMem - freeMem,
                 disk_used: diskBytes,
-                disk_total: 20 * 1024 * 1024 * 1024 // 20GB Límite Visual
+                disk_total: 20 * 1024 * 1024 * 1024 
             });
         });
     });
@@ -258,8 +294,6 @@ app.get('/api/files', (req, res) => {
         isDir: f.isDirectory(),
         size: f.isDirectory() ? '-' : (fs.statSync(path.join(t, f.name)).size / 1024).toFixed(1) + ' KB'
     }));
-    
-    // Ordenar: Carpetas primero
     res.json(files.sort((a, b) => a.isDir === b.isDir ? 0 : a.isDir ? -1 : 1));
 });
 
@@ -283,7 +317,7 @@ app.post('/api/files/upload', upload.single('file'), (req, res) => {
     }
 });
 
-// --- CONFIGURACIÓN Y BACKUPS ---
+// --- CONFIG Y BACKUPS ---
 app.get('/api/config', (req, res) => res.json(mcServer.readProperties()));
 app.post('/api/config', (req, res) => {
     mcServer.writeProperties(req.body);
@@ -316,7 +350,7 @@ app.post('/api/backups/restore', async (req, res) => {
     exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e }));
 });
 
-// --- SOCKET.IO (TIEMPO REAL) ---
+// --- SOCKET.IO ---
 io.on('connection', (s) => {
     s.emit('logs_history', mcServer.getRecentLogs());
     s.emit('status_change', mcServer.status);
@@ -324,4 +358,4 @@ io.on('connection', (s) => {
 });
 
 // --- ARRANQUE ---
-server.listen(3000, () => console.log('Aether Panel V1.4.3 running on port 3000'));
+server.listen(3000, () => console.log('Aether Panel V1.5.0 running on port 3000'));
