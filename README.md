@@ -109,9 +109,8 @@ sed -i 's/\r$//' *.sh
 
 -----
 
-\<div align="center"\>
+<div align="center">
 
-**Desarrollado con ❤️ por ReyChampi**
-[Reportar un Bug](https://www.google.com/search?q=https://github.com/reychampi/aether-panel/issues)
+Desarrollado con ❤️ por ReyChampi Reportar un Bug
 
-</div\>
+</div>
