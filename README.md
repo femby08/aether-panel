@@ -7,7 +7,7 @@
 **El panel de control ligero, moderno y potente para servidores de Minecraft.**
 Gestión inteligente, monitoreo en tiempo real y diseño Glassmorphism.
 
-[![Version](https://img.shields.io/badge/version-1.4.3-8b5cf6?style=for-the-badge&logo=git)](https://github.com/reychampi/aether-panel)
+[![Version](https://img.shields.io/badge/version-1.5.2-8b5cf6?style=for-the-badge&logo=git)](https://github.com/reychampi/aether-panel)
 [![Status](https://img.shields.io/badge/status-stable-10b981?style=for-the-badge)](https://github.com/reychampi/aether-panel)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 
