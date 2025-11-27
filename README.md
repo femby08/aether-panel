@@ -1,5 +1,6 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg" alt="Aether Panel Logo" width="120" height="120">
+
+<img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.png" alt="Aether Panel Logo" width="120" height="120">
 
 # 🌌 Aether Panel
 
@@ -37,24 +38,20 @@ Aether Panel está optimizado para distribuciones basadas en **Debian** que util
 
 ---
 
-## 🚀 Novedades V1.4.3
+## 🚀 Novedades V1.5.x
 
-Esta versión consolida todas las mejoras de estabilidad y visualización.
+Esta versión introduce mejoras masivas en la Calidad de Vida (QoL) y la experiencia de usuario.
 
-### 🛠️ Correcciones Críticas (Core)
-* **Instalación Universal:** Solucionado el error `$'\r': command not found` mediante conversión forzada a formato Linux (LF).
-* **Servicio Robusto:** El panel ahora detecta automáticamente la ruta de instalación de `node` para evitar fallos en VPS con entornos personalizados.
-* **Dependencias:** Añadido `rsync` al instalador para garantizar actualizaciones seguras sin pérdida de datos.
-* **Descargas Inteligentes:** Nuevo sistema para obtener enlaces de descarga de **Forge, Fabric y Paper** sin errores de "Link not found".
+### 🎮 Experiencia de Usuario (UI/UX)
+* **Consola Interactiva:** Ahora puedes escribir y enviar comandos directamente desde la interfaz web, con una caja de terminal dedicada.
+* **Sistema de Ayuda Inteligente:** Añadidos tooltips `(?)` en todas las opciones del `server.properties` que explican qué hace cada configuración al pasar el ratón.
+* **Atajos de Teclado:** Navega como un pro usando `Alt + 1` al `8` para cambiar pestañas y `ESC` para cerrar ventanas.
+* **IP en Cabecera:** Haz clic en la IP del servidor en la parte superior para copiarla al portapapeles al instante.
 
-### 🎨 Mejoras Visuales y UI
-* **Gráficas Precisas:**
-    * **RAM:** Visualización en **GB** reales con decimales limpios.
-    * **CPU:** Escala fija (0-100%) para una lectura más natural del rendimiento.
-    * **Disco:** Cálculo recursivo real del espacio ocupado por el servidor.
-* **Editor de Configuración:**
-    * El archivo `server.properties` ahora se muestra con **Interruptores (Switches)** para opciones como `online-mode` (Premium/Crackeado), PvP, Vuelo, etc.
-    * Diseño alineado y limpio para todos los campos de configuración.
+### 🛠️ Mejoras Técnicas
+* **Actualizador de UI Independiente:** Nuevo botón para forzar la actualización de la interfaz gráfica (HTML/CSS/JS) sin reiniciar el servidor.
+* **Soporte de Temas:** Todos los menús, modales y ventanas emergentes ahora son 100% compatibles con el Modo Claro y Oscuro.
+* **Instalador de Versiones:** Lógica de descarga reescrita para evitar errores con Forge y Vanilla.
 
 ---
 
@@ -63,53 +60,52 @@ Esta versión consolida todas las mejoras de estabilidad y visualización.
 Accede a tu terminal como usuario `root` y ejecuta el siguiente comando mágico:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh | bash
-````
+curl -sL [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh) | bash
 
 El instalador automático se encargará de:
 
-1.  Instalar dependencias (Java, Node.js, Git, Zip, Rsync).
-2.  Configurar el servicio automático `systemd` para que el panel se inicie solo.
-3.  Descargar el núcleo del panel y los recursos gráficos.
-4.  Iniciar el servicio en el puerto **3000**.
+    Instalar dependencias (Java, Node.js, Git, Zip, Rsync).
 
------
+    Configurar el servicio automático systemd para que el panel se inicie solo.
 
-## ⚡ Características
+    Descargar el núcleo del panel y los recursos gráficos.
 
-  * **🖥️ Monitor en Tiempo Real:** Gráficas de CPU, RAM y Disco con actualización por Sockets.
-  * **💻 Consola Web:** Terminal en vivo con colores y envío de comandos.
-  * **📂 Gestor de Archivos:** Editor de texto integrado (Ace Editor) con resaltado de sintaxis.
-  * **📥 Instalador de Núcleos:** Descarga Vanilla, Paper, Fabric o Forge con un solo clic.
-  * **📦 Sistema de Backups:** Crea y restaura copias de seguridad en segundos.
-  * **🧩 Tienda de Mods:** Instalador rápido para mods populares (JEI, JourneyMap, etc.).
-  * **⚙️ Configuración Visual:** Edita `server.properties` con una interfaz gráfica amigable.
-  * **🔄 Smart Updater:** Sistema de actualizaciones OTA (Over-The-Air) integrado que protege tus datos.
+    Iniciar el servicio en el puerto 3000.
 
------
+⚡ Características
 
-## 🛠️ Solución de Problemas Frecuentes
+    🖥️ Monitor en Tiempo Real: Gráficas de CPU, RAM y Disco con actualización por Sockets.
 
-**El panel no carga en el navegador**
-Asegúrate de que el puerto 3000 está abierto en tu firewall:
+    💻 Consola Web: Terminal en vivo con colores y envío de comandos.
 
-```bash
+    📂 Gestor de Archivos: Editor de texto integrado (Ace Editor) con resaltado de sintaxis.
+
+    📥 Instalador de Núcleos: Descarga Vanilla, Paper, Fabric o Forge con un solo clic.
+
+    📦 Sistema de Backups: Crea y restaura copias de seguridad en segundos.
+
+    🧩 Tienda de Mods: Instalador rápido para mods populares (JEI, JourneyMap, etc.) con buscador en tiempo real.
+
+    ⚙️ Configuración Visual: Edita server.properties con interruptores y ayudas visuales.
+
+    🔄 Smart Updater: Sistema de actualizaciones OTA (Over-The-Air) integrado que protege tus datos.
+
+🛠️ Solución de Problemas Frecuentes
+
+El panel no carga en el navegador Asegúrate de que el puerto 3000 está abierto en tu firewall:
+Bash
+
 sudo ufw allow 3000/tcp
-```
 
 Si usas Oracle Cloud o AWS, abre también el puerto en el panel de seguridad de tu proveedor.
 
-**Error "command not found" al instalar**
-Si descargaste los archivos manualmente en Windows y los subiste, es posible que tengan formato incorrecto. Ejecuta en la carpeta del panel:
+Error "command not found" al instalar Si descargaste los archivos manualmente en Windows y los subiste, es posible que tengan formato incorrecto. Ejecuta en la carpeta del panel:
+Bash
 
-```bash
 sed -i 's/\r$//' *.sh
-```
-
------
 
 <div align="center">
 
-Desarrollado por ReyChampi
+Desarrollado con ❤️ por ReyChampi Reportar un Bug
 
 </div>
