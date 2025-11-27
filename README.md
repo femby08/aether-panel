@@ -111,6 +111,6 @@ sed -i 's/\r$//' *.sh
 
 <div align="center">
 
-Desarrollado con ❤️ por ReyChampi Reportar un Bug
+Desarrollado con ❤️ por ReyChampi
 
 </div>
