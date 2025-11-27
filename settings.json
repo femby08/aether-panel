@@ -13,18 +13,21 @@ class MCManager {
         
         this.status = 'OFFLINE';
         this.logs = [];
-        this.loadSettings(); 
+        this.loadSettings(); // Cargar configuración al iniciar
     }
 
+    // CAMBIO: Cargar configuración manual
     loadSettings() {
         try {
             if (fs.existsSync(this.settingsPath)) {
                 const settings = JSON.parse(fs.readFileSync(this.settingsPath, 'utf8'));
                 this.ram = settings.ram || '4G';
             } else {
-                this.ram = '4G';
+                this.ram = '4G'; // Valor por defecto
             }
-        } catch (e) { this.ram = '4G'; }
+        } catch (e) {
+            this.ram = '4G';
+        }
     }
 
     log(msg) { this.logs.push(msg); if(this.logs.length>2000)this.logs.shift(); this.io.emit('console_data', msg); }
@@ -33,6 +36,8 @@ class MCManager {
     
     async start() {
         if (this.status !== 'OFFLINE') return;
+        
+        // Recargar settings antes de iniciar por si hubo cambios
         this.loadSettings();
 
         const eula = path.join(this.serverPath, 'eula.txt');
