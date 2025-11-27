@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg" alt="Aether Panel Logo" width="120" height="120">
+<img src="[https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg](https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg)" alt="Aether Panel Logo" width="120" height="120">
 
 # 🌌 Aether Panel
 
@@ -64,52 +64,57 @@ Esta versión consolida todas las mejoras de estabilidad y visualización.
 Accede a tu terminal como usuario `root` y ejecuta el siguiente comando mágico:
 
 ```bash
-bash <(curl -s [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh))
+bash <(curl -s https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh)
+````
 
 El instalador automático se encargará de:
 
-    Instalar dependencias (Java, Node.js, Git, Zip, Rsync).
+1.  Instalar dependencias (Java, Node.js, Git, Zip, Rsync).
+2.  Configurar el servicio automático `systemd` para que el panel se inicie solo.
+3.  Descargar el núcleo del panel y los recursos gráficos.
+4.  Iniciar el servicio en el puerto **3000**.
 
-    Configurar el servicio automático systemd para que el panel se inicie solo.
+-----
 
-    Descargar el núcleo del panel y los recursos gráficos.
+## ⚡ Características
 
-    Iniciar el servicio en el puerto 3000.
+  * **🖥️ Monitor en Tiempo Real:** Gráficas de CPU, RAM y Disco con actualización por Sockets.
+  * **💻 Consola Web:** Terminal en vivo con colores y envío de comandos.
+  * **📂 Gestor de Archivos:** Editor de texto integrado (Ace Editor) con resaltado de sintaxis.
+  * **📥 Instalador de Núcleos:** Descarga Vanilla, Paper, Fabric o Forge con un solo clic.
+  * **📦 Sistema de Backups:** Crea y restaura copias de seguridad en segundos.
+  * **🧩 Tienda de Mods:** Instalador rápido para mods populares (JEI, JourneyMap, etc.).
+  * **⚙️ Configuración Visual:** Edita `server.properties` con una interfaz gráfica amigable.
+  * **🔄 Smart Updater:** Sistema de actualizaciones OTA (Over-The-Air) integrado que protege tus datos.
 
-⚡ Características
+-----
 
-    🖥️ Monitor en Tiempo Real: Gráficas de CPU, RAM y Disco con actualización por Sockets.
+## 🛠️ Solución de Problemas Frecuentes
 
-    💻 Consola Web: Terminal en vivo con colores y envío de comandos.
+**El panel no carga en el navegador**
+Asegúrate de que el puerto 3000 está abierto en tu firewall:
 
-    📂 Gestor de Archivos: Editor de texto integrado (Ace Editor) con resaltado de sintaxis.
-
-    📥 Instalador de Núcleos: Descarga Vanilla, Paper, Fabric o Forge con un solo clic.
-
-    📦 Sistema de Backups: Crea y restaura copias de seguridad en segundos.
-
-    🧩 Tienda de Mods: Instalador rápido para mods populares (JEI, JourneyMap, etc.).
-
-    ⚙️ Configuración Visual: Edita server.properties con una interfaz gráfica amigable.
-
-    🔄 Smart Updater: Sistema de actualizaciones OTA (Over-The-Air) integrado que protege tus datos.
-
-🛠️ Solución de Problemas Frecuentes
-
-El panel no carga en el navegador Asegúrate de que el puerto 3000 está abierto en tu firewall:
-Bash
-
+```bash
 sudo ufw allow 3000/tcp
+```
 
 Si usas Oracle Cloud o AWS, abre también el puerto en el panel de seguridad de tu proveedor.
 
-Error "command not found" al instalar Si descargaste los archivos manualmente en Windows y los subiste, es posible que tengan formato incorrecto. Ejecuta en la carpeta del panel:
-Bash
+**Error "command not found" al instalar**
+Si descargaste los archivos manualmente en Windows y los subiste, es posible que tengan formato incorrecto. Ejecuta en la carpeta del panel:
 
+```bash
 sed -i 's/\r$//' *.sh
+```
 
-<div align="center">
+-----
 
-Desarrollado con ❤️ por ReyChampi Reportar un Bug
+\<div align="center"\>
 
-</div>
+**Desarrollado con ❤️ por ReyChampi**
+[Reportar un Bug](https://www.google.com/search?q=https://github.com/reychampi/aether-panel/issues)
+
+\</div\>
+
+```
+```
