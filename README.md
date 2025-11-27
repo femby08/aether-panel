@@ -59,7 +59,6 @@ Esta versión introduce mejoras masivas en la Calidad de Vida (QoL) y la experie
 
 Accede a tu terminal como usuario `root` y ejecuta el siguiente comando:
 <pre>
-```bash
 curl -sL [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh) | bash
 </pre>
 El instalador automático se encargará de:
@@ -98,22 +97,23 @@ El panel no carga en el navegador Asegúrate de abrir el puerto 3000 en tu firew
 
     Ubuntu/Debian:
     Bash
-
+<pre>
 sudo ufw allow 3000/tcp
+</pre>
 
 Fedora/CentOS:
 Bash
-
+<pre>
     sudo firewall-cmd --permanent --add-port=3000/tcp
     sudo firewall-cmd --reload
-
+</pre>
 Error "command not found" o "$'\r'" al instalar Si subiste los archivos manualmente desde Windows, es posible que tengan formato incorrecto. Ejecuta en la carpeta del panel:
 Bash
-
+<pre>
 sed -i 's/\r$//' *.sh
-
+</pre>
 <div align="center">
 
-Desarrollado con ❤️ por ReyChampi Reportar un Bug
+Desarrollado por ReyChampi Reportar un Bug
 
 </div>
