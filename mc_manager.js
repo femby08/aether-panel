@@ -49,15 +49,24 @@ class MCManager {
     async kill() { if(this.process) { this.process.kill('SIGKILL'); this.status='OFFLINE'; this.io.emit('status_change','OFFLINE'); }}
     sendCommand(c) { if(this.process) this.process.stdin.write(c+'\n'); }
     
+    // --- DESCARGA UNIVERSAL (AQUÍ ESTÁN LOS MENSAJES) ---
     async installJar(url, filename) {
-        this.io.emit('toast', {type:'info', msg:'Descargando núcleo...'}); this.log(`\r\nDescargando: ${url}\r\n`);
+        this.io.emit('toast', {type:'info', msg:'Descargando núcleo...'}); 
+        this.log(`\r\nDescargando: ${url}\r\n`);
         fs.readdirSync(this.serverPath).forEach(f => { if(f.endsWith('.jar')) fs.unlinkSync(path.join(this.serverPath, f)); });
         const target = path.join(this.serverPath, filename);
+
         try {
             const response = await axios({ url, method: 'GET', responseType: 'stream' });
             await pipeline(response.data, fs.createWriteStream(target));
+            
             this.io.emit('toast', {type:'success', msg:'Instalado correctamente'});
-        } catch (error) { this.io.emit('toast', {type:'error', msg:'Error descarga'}); throw error; }
+            this.log('\r\n>>> INSTALACIÓN COMPLETADA. PUEDES INICIAR EL SERVIDOR.\r\n');
+        } catch (error) {
+            this.io.emit('toast', {type:'error', msg:'Error en la descarga'});
+            this.log(`Error descarga: ${error.message}`);
+            throw error;
+        }
     }
     readProperties() { try{return fs.readFileSync(path.join(this.serverPath,'server.properties'),'utf8').split('\n').reduce((a,l)=>{const[k,v]=l.split('=');if(k&&!l.startsWith('#'))a[k.trim()]=v?v.trim():'';return a;},{});}catch{return{};} }
     writeProperties(p) { fs.writeFileSync(path.join(this.serverPath,'server.properties'), '#Gen by Aether Panel\n'+Object.entries(p).map(([k,v])=>`${k}=${v}`).join('\n')); }
