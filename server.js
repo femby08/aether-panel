@@ -9,12 +9,17 @@ const os = require('os');
 const multer = require('multer');
 const axios = require('axios');
 const { exec, spawn } = require('child_process');
+const stream = require('stream');
+const { promisify } = require('util');
 
 // --- INICIALIZACIÓN ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const upload = multer({ dest: os.tmpdir() });
+const pipeline = promisify(stream.pipeline);
+
+const IS_WIN = process.platform === 'win32';
 
 // --- DIRECTORIOS ---
 const SERVER_DIR = path.join(__dirname, 'servers', 'default');
@@ -23,21 +28,23 @@ const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(SERVER_DIR)) fs.mkdirSync(SERVER_DIR, { recursive: true });
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
-// --- MIDDLEWARE ---
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// --- GESTOR MINECRAFT ---
 const mcServer = new MCManager(io);
-
-// --- CLIENTE API GITHUB ---
 const apiClient = axios.create({ headers: { 'User-Agent': 'Aether-Panel/1.5.4' }, timeout: 10000 });
-// URL para descargar archivos (aún usa CDN raw, pero con cache-busting en soft update)
 const REPO_RAW = 'https://raw.githubusercontent.com/reychampi/aether-panel/main'; 
-// URL de la API (instantánea, sin caché de CDN)
 const GH_API_URL = 'https://api.github.com/repos/reychampi/aether-panel/contents/package.json?ref=main'; 
 
-// --- UTILIDADES ---
+// --- UTILIDADES UNIVERSALES ---
+
+// 1. Descarga Universal (Reemplaza a wget/curl)
+async function downloadFile(url, destPath) {
+    const response = await axios({ url, method: 'GET', responseType: 'stream' });
+    await pipeline(response.data, fs.createWriteStream(destPath));
+}
+
+// 2. Tamaño de Directorio (Recursivo JS puro)
 const getDirSize = (dirPath) => {
     let size = 0;
     try {
@@ -54,7 +61,7 @@ const getDirSize = (dirPath) => {
     return size;
 };
 
-// Función para detectar la IP Local del VPS
+// 3. IP Local
 function getServerIP() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -67,26 +74,25 @@ function getServerIP() {
     return '127.0.0.1';
 }
 
-// ==========================================
-//                 RUTAS API
-// ==========================================
+// --- API ---
 
-// --- API DE RED (IP) ---
 app.get('/api/network', (req, res) => {
     let port = 25565;
+    let customDomain = null;
     try {
         const props = fs.readFileSync(path.join(SERVER_DIR, 'server.properties'), 'utf8');
         const match = props.match(/server-port=(\d+)/);
         if (match) port = match[1];
+        
+        const settingsPath = path.join(__dirname, 'settings.json');
+        if (fs.existsSync(settingsPath)) {
+            const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+            customDomain = settings.custom_domain || null;
+        }
     } catch (e) {}
-
-    res.json({ 
-        ip: getServerIP(), 
-        port: port 
-    });
+    res.json({ ip: getServerIP(), port: port, custom_domain: customDomain });
 });
 
-// --- INFO DEL SISTEMA ---
 app.get('/api/info', (req, res) => {
     try {
         const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
@@ -94,89 +100,78 @@ app.get('/api/info', (req, res) => {
     } catch (e) { res.json({ version: 'Unknown' }); }
 });
 
-// --- SISTEMA DE ACTUALIZACIONES (FIJO ANTI-CACHÉ) ---
+// --- UPDATES ---
 app.get('/api/update/check', async (req, res) => {
     try {
         const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-        
-        // <<<<<<<<<< CAMBIO CRÍTICO: USAR API DE GITHUB PARA VERSIÓN (SIN CACHÉ) >>>>>>>>>>
         const remoteResponse = (await apiClient.get(GH_API_URL)).data;
-        // Decodificar Base64 que viene de la API
         const content = Buffer.from(remoteResponse.content, 'base64').toString();
         const remotePkg = JSON.parse(content);
         
-        // 1. Hard Update (Cambio de versión numérica)
         if (remotePkg.version !== localPkg.version) {
-            return res.json({ type: 'hard', local: localPkg.version, remote: remotePkg.version });
+            // En Windows desactivamos Hard Updates automáticas por ahora (requiere script .bat complejo)
+            const type = IS_WIN ? 'manual_required' : 'hard';
+            return res.json({ type: type, local: localPkg.version, remote: remotePkg.version });
         }
 
-        // 2. Soft Update (Cambios visuales)
+        // Soft Update Logic
         const files = ['public/index.html', 'public/style.css', 'public/app.js'];
         let hasChanges = false;
         for (const f of files) {
             try {
-                // Se usa REPO_RAW para archivos visuales, añadiendo timestamp para cache-busting
                 const remoteContent = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
                 const localPath = path.join(__dirname, f);
                 if (fs.existsSync(localPath)) {
                     const localContent = fs.readFileSync(localPath, 'utf8');
-                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) {
-                        hasChanges = true; 
-                        break;
-                    }
+                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) { hasChanges = true; break; }
                 }
             } catch(e) {}
         }
 
         if (hasChanges) return res.json({ type: 'soft', local: localPkg.version, remote: remotePkg.version });
         res.json({ type: 'none' });
-
-    } catch (e) {
-        // Esto captura fallos de red o errores de JSON (como un 404)
-        console.error("UPDATE CHECK FAILED (API):", e.message); 
-        res.json({ type: 'error' });
-    }
+    } catch (e) { console.error(e); res.json({ type: 'error' }); }
 });
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
     
-    if (type === 'hard') {
-        io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización segura...' });
+    if (type === 'hard' && !IS_WIN) {
+        io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización...' });
         const updater = spawn('bash', ['/opt/aetherpanel/updater.sh'], { detached: true, stdio: 'ignore' });
         updater.unref();
-        res.json({ success: true, mode: 'hard' });
+        res.json({ success: true });
         setTimeout(() => process.exit(0), 1000);
-    } 
-    else if (type === 'soft') {
-        io.emit('toast', { type: 'info', msg: '🎨 Actualizando visuales...' });
+    } else if (type === 'soft') {
+        io.emit('toast', { type: 'info', msg: '🎨 Actualizando UI...' });
         try {
             const files = ['public/index.html', 'public/style.css', 'public/app.js'];
             for (const f of files) {
-                // Se usa timestamp aquí también para forzar la descarga de los archivos raw
                 const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
                 fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
             }
-            // Bajamos logos también
-            exec(`wget -q -O /opt/aetherpanel/public/logo.svg ${REPO_RAW}/public/logo.svg`);
-            exec(`wget -q -O /opt/aetherpanel/public/logo.ico ${REPO_RAW}/public/logo.ico`);
+            // Descarga de Logos Universal
+            await downloadFile(`${REPO_RAW}/public/logo.svg`, path.join(__dirname, 'public', 'logo.svg'));
+            await downloadFile(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public', 'logo.ico'));
             
-            res.json({ success: true, mode: 'soft' });
-        } catch (e) { 
-            res.status(500).json({ error: e.message }); 
-        }
+            res.json({ success: true });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    } else {
+        res.json({ success: false, message: "Modo no soportado en Windows" });
     }
 });
 
-// --- AJUSTES (RAM) ---
 app.post('/api/settings', (req, res) => {
     try {
-        const { ram } = req.body;
-        if (ram) {
-            fs.writeFileSync(path.join(__dirname, 'settings.json'), JSON.stringify({ ram }));
-            mcServer.loadSettings();
-            res.json({ success: true, ram });
-        } else res.status(400).json({ error: 'Missing RAM' });
+        const { ram, custom_domain } = req.body;
+        let settings = {};
+        const settingsPath = path.join(__dirname, 'settings.json');
+        if (fs.existsSync(settingsPath)) settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        if (ram) settings.ram = ram;
+        settings.custom_domain = custom_domain || null;
+        fs.writeFileSync(settingsPath, JSON.stringify(settings));
+        mcServer.loadSettings();
+        res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -187,11 +182,11 @@ app.get('/api/settings', (req, res) => {
     } catch(e) { res.json({ ram: '4G' }); }
 });
 
-// --- RESOLUCIÓN VERSIONES ---
+// --- MINECRAFT LOGIC ---
 app.post('/api/nebula/versions', async (req, res) => {
+    // (Mismo código de versiones que antes, funciona en Windows porque es solo Axios)
     try {
-        const t = req.body.type;
-        let l = [];
+        const t = req.body.type; let l = [];
         if (t === 'vanilla') l = (await apiClient.get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')).data.versions.filter(v => v.type === 'release').map(v => ({ id: v.id, url: v.url, type: 'vanilla' }));
         else if (t === 'paper') l = (await apiClient.get('https://api.papermc.io/v2/projects/paper')).data.versions.reverse().map(v => ({ id: v, type: 'paper' }));
         else if (t === 'fabric') l = (await apiClient.get('https://meta.fabricmc.net/v2/versions/game')).data.filter(v => v.stable).map(v => ({ id: v.version, type: 'fabric' }));
@@ -216,41 +211,42 @@ app.post('/api/nebula/resolve-forge', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Forge Resolve Failed' }); }
 });
 
-// --- INSTALACIÓN ---
 app.post('/api/install', async (req, res) => { try { await mcServer.installJar(req.body.url, req.body.filename); res.json({ success: true }); } catch (e) { res.status(500).json({}); } });
 
 app.post('/api/mods/install', async (req, res) => {
-    const { url, name } = req.body; const d = path.join(SERVER_DIR, 'mods');
+    const { url, name } = req.body;
+    const d = path.join(SERVER_DIR, 'mods');
     if (!fs.existsSync(d)) fs.mkdirSync(d);
     io.emit('toast', { type: 'info', msg: `Instalando ${name}...` });
-    exec(`wget -q -O "${path.join(d, name.replace(/\s+/g, '_') + '.jar')}" "${url}"`, (e) => {
-        if (e) io.emit('toast', { type: 'error', msg: 'Error al descargar' }); else io.emit('toast', { type: 'success', msg: 'Mod Instalado' });
-    });
-    res.json({ success: true });
+    
+    try {
+        await downloadFile(url, path.join(d, name.replace(/\s+/g, '_') + '.jar'));
+        io.emit('toast', { type: 'success', msg: 'Mod Instalado' });
+        res.json({ success: true });
+    } catch(e) {
+        io.emit('toast', { type: 'error', msg: 'Error al descargar' });
+        res.json({ success: false });
+    }
 });
 
-// --- MONITOR ---
 app.get('/api/stats', (req, res) => {
     osUtils.cpuUsage((cpuPercent) => {
-        exec(`du -sb ${SERVER_DIR}`, (error, stdout) => {
-            let diskBytes = 0;
-            if (!error && stdout) diskBytes = parseInt(stdout.split(/\s+/)[0]);
-            else diskBytes = getDirSize(SERVER_DIR);
+        // Uso universal del cálculo de disco
+        const diskBytes = getDirSize(SERVER_DIR);
+        
+        const cpus = os.cpus();
+        const cpuFreq = cpus.length > 0 ? cpus[0].speed : 0;
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
 
-            const cpus = os.cpus();
-            const cpuFreq = cpus.length > 0 ? cpus[0].speed : 0;
-            const totalMem = os.totalmem();
-            const freeMem = os.freemem();
-
-            res.json({
-                cpu: cpuPercent * 100,
-                cpu_freq: cpuFreq,
-                ram_total: totalMem,
-                ram_free: freeMem,
-                ram_used: totalMem - freeMem,
-                disk_used: diskBytes,
-                disk_total: 20 * 1024 * 1024 * 1024 
-            });
+        res.json({
+            cpu: cpuPercent * 100,
+            cpu_freq: cpuFreq,
+            ram_total: totalMem,
+            ram_free: freeMem,
+            ram_used: totalMem - freeMem,
+            disk_used: diskBytes,
+            disk_total: 20 * 1024 * 1024 * 1024
         });
     });
 });
@@ -258,7 +254,6 @@ app.get('/api/stats', (req, res) => {
 app.get('/api/status', (req, res) => res.json(mcServer.getStatus()));
 app.post('/api/power/:a', async (req, res) => { try { if (mcServer[req.params.a]) await mcServer[req.params.a](); res.json({ success: true }); } catch (e) { res.status(500).json({}); } });
 
-// --- FILES ---
 app.get('/api/files', (req, res) => {
     const t = path.join(SERVER_DIR, (req.query.path || '').replace(/\.\./g, ''));
     if (!fs.existsSync(t)) return res.json([]);
@@ -267,21 +262,28 @@ app.get('/api/files', (req, res) => {
     }));
     res.json(files.sort((a, b) => a.isDir === b.isDir ? 0 : a.isDir ? -1 : 1));
 });
+
 app.post('/api/files/read', (req, res) => { const p = path.join(SERVER_DIR, req.body.file.replace(/\.\./g, '')); if (fs.existsSync(p)) res.json({ content: fs.readFileSync(p, 'utf8') }); else res.status(404).json({}); });
 app.post('/api/files/save', (req, res) => { fs.writeFileSync(path.join(SERVER_DIR, req.body.file.replace(/\.\./g, '')), req.body.content); res.json({ success: true }); });
 app.post('/api/files/upload', upload.single('file'), (req, res) => { if (req.file) { fs.renameSync(req.file.path, path.join(SERVER_DIR, req.file.originalname)); res.json({ success: true }); } else res.json({ success: false }); });
 
-// --- CONFIG & BACKUPS ---
 app.get('/api/config', (req, res) => res.json(mcServer.readProperties()));
 app.post('/api/config', (req, res) => { mcServer.writeProperties(req.body); res.json({ success: true }); });
 
-app.get('/api/backups', (req, res) => { if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); res.json(fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.tar.gz')).map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1048576).toFixed(2) + ' MB' }))); });
-app.post('/api/backups/create', (req, res) => { exec(`tar -czf "${path.join(BACKUP_DIR, 'backup-' + Date.now() + '.tar.gz')}" -C "${path.join(__dirname, 'servers')}" default`, (e) => res.json({ success: !e })); });
+app.get('/api/backups', (req, res) => { 
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); 
+    res.json(fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.tar.gz') || f.endsWith('.zip')).map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1048576).toFixed(2) + ' MB' }))); 
+});
+
+// BACKUPS UNIVERSALES (TAR en Linux, ZIP en Windows si se implementara, por ahora TAR funciona en Win10+ cmd)
+app.post('/api/backups/create', (req, res) => {
+    const backupName = `backup-${Date.now()}.tar.gz`;
+    // Usamos tar porque Windows 10/11 ya lo incluye nativamente
+    exec(`tar -czf "${path.join(BACKUP_DIR, backupName)}" -C "${path.join(__dirname, 'servers')}" default`, (e) => res.json({ success: !e }));
+});
 app.post('/api/backups/delete', (req, res) => { fs.unlinkSync(path.join(BACKUP_DIR, req.body.name)); res.json({ success: true }); });
 app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e })); });
 
-// --- SOCKET.IO ---
 io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
 
-// --- ARRANQUE ---
-server.listen(3000, () => console.log('Aether Panel V1.5.4 (Anti-Cache) running on port 3000'));
+server.listen(3000, () => console.log('Aether Panel V1.5.4 (Universal) running on port 3000'));
