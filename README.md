@@ -1,10 +1,11 @@
 <div align="center">
+
 <h1 align="center">
   <img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.png" alt="Logo" width="30" style="vertical-align: middle; margin-right: 10px;">
   Aether Panel
 </h1>
 
-**El panel de control ligero, moderno y potente para servidores de Minecraft.**
+**El panel de control ligero, moderno y potente para servidores de Minecraft.**  
 Gestión inteligente, monitoreo en tiempo real y diseño Glassmorphism.
 
 [![Version](https://img.shields.io/badge/version-1.6.0-8b5cf6?style=for-the-badge&logo=git)](https://github.com/reychampi/aether-panel)
@@ -20,7 +21,8 @@ Gestión inteligente, monitoreo en tiempo real y diseño Glassmorphism.
 
 ## ✨ Descripción
 
-**Aether Panel** es una solución todo-en-uno para administrar servidores de Minecraft. Diseñado para ser visualmente impactante y técnicamente robusto, elimina la necesidad de configuraciones complejas, ofreciendo una interfaz web reactiva y fácil de usar tanto en **Linux** como en **Windows**.
+**Aether Panel** es una solución todo-en-uno para administrar servidores de Minecraft.  
+Diseñado para ser visualmente impactante y técnicamente robusto, elimina la necesidad de configuraciones complejas, ofreciendo una interfaz web rápida, moderna y fácil de usar tanto en **Linux** como en **Windows**.
 
 ![Dashboard Preview](https://raw.githubusercontent.com/reychampi/aether-panel/main/public/panel.png)
 
@@ -31,7 +33,7 @@ Gestión inteligente, monitoreo en tiempo real y diseño Glassmorphism.
 Aether Panel es ahora **Universal** y funciona nativamente en la mayoría de sistemas modernos.
 
 | Familia | Distribuciones / SO | Método | Estado |
-| :--- | :--- | :--- | :--- |
+|--------|----------------------|--------|--------|
 | **Debian** | Ubuntu 20.04+, Debian 10+, Mint | `apt` | ✅ **Nativo** |
 | **RHEL** | Fedora 36+, CentOS 8+, Rocky | `dnf` | ✅ **Nativo** |
 | **Arch** | Arch Linux, Manjaro | `pacman` | ✅ **Nativo** |
@@ -44,67 +46,84 @@ Aether Panel es ahora **Universal** y funciona nativamente en la mayoría de sis
 ## 🚀 Novedades V1.5.x
 
 ### 🎮 Experiencia de Usuario (UI/UX)
-* **Consola Interactiva:** Envía comandos al servidor directamente desde la web.
-* **Sistema de Ayuda:** Tooltips `(?)` explicativos en todas las opciones del `server.properties`.
-* **Atajos de Teclado:** Navega rápido usando `Alt + 1-8` y cierra ventanas con `ESC`.
-* **IP Copiable:** Haz clic en la IP de la cabecera para copiarla al portapapeles.
+
+- **Consola Interactiva:** Envía comandos al servidor directamente desde la web.  
+- **Sistema de Ayuda:** Tooltips `(?)` explicativos en todas las opciones del `server.properties`.  
+- **Atajos de Teclado:** Navega rápido usando `Alt + 1-8` y cierra ventanas con `ESC`.  
+- **IP Copiable:** Haz clic en la IP de la cabecera para copiarla al portapapeles.
 
 ### 🛠️ Mejoras Técnicas
-* **Soporte Windows Nativo:** Nuevo lanzador `start_windows.bat` que instala dependencias (Node/Java) automáticamente.
-* **Instalador Linux Universal:** Detección automática de distro (Ubuntu/Fedora/Arch).
-* **Actualizador UI:** Botón para forzar la actualización de la interfaz gráfica sin reiniciar.
-* **Soporte de Temas:** Compatibilidad total con Modo Claro y Oscuro.
-* **Resolución de Versiones:** Lógica mejorada para descargar Forge, Fabric y Paper.
+
+- **Soporte Windows Nativo:** Nuevo lanzador `start_windows.bat` que instala dependencias (Node/Java) automáticamente.  
+- **Instalador Linux Universal:** Detecta automáticamente tu distribución (Ubuntu/Fedora/Arch).  
+- **Actualizador UI:** Botón para forzar actualización de la interfaz sin reiniciar servicios.  
+- **Soporte de Temas:** Compatibilidad completa con Modo Claro y Oscuro.  
+- **Resolución de Versiones:** Descarga más estable de Forge, Fabric y Paper.
 
 ---
 
 ## 📦 Instalación Rápida
 
-### 🐧 En Linux (VPS/Dedicado)
-Accede a tu terminal como usuario `root` y ejecuta:
-curl -sL [https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh](https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh) | bash
+### 🐧 Linux (VPS / Dedicado)
 
-🪟 En Windows (PC/Server)
+Ejecuta como **root**:
 
-    Descarga el código del repositorio (Botón Code > Download ZIP) y descomprímelo.
+```sh
+curl -sL https://raw.githubusercontent.com/reychampi/aether-panel/main/installserver.sh | bash
 
-    Haz doble clic en el archivo start_windows.bat.
+🪟 Windows (PC / Server)
 
-    El script instalará automáticamente Node.js y Java si no los tienes.
+    Descarga el repositorio (Code → Download ZIP).
 
-    El panel se abrirá automáticamente.
+    Descomprime la carpeta.
+
+    Ejecuta start_windows.bat.
+
+    El script instalará Node.js y Java automáticamente si no están instalados.
+
+    El panel se abrirá automáticamente en tu navegador.
 
 ⚡ Características
 
-    🖥️ Monitor en Tiempo Real: Gráficas de CPU, RAM y Disco.
+    🖥️ Monitor en Tiempo Real: Gráficas dinámicas de CPU, RAM y Disco.
 
-    💻 Consola Web: Terminal en vivo con colores y envío de comandos.
+    💻 Consola Web: Terminal en vivo con colores y soporte de comandos.
 
-    📂 Gestor de Archivos: Editor de texto integrado con resaltado de sintaxis.
+    📂 Gestor de Archivos: Editor integrado con resaltado de sintaxis.
 
     📥 Instalador de Núcleos: Vanilla, Paper, Fabric y Forge a un clic.
 
-    📦 Backups: Sistema de copias de seguridad .tar.gz.
+    📦 Backups: Copias de seguridad .tar.gz con restauración instantánea.
 
-    🧩 Tienda de Mods: Buscador integrado para instalar mods populares.
+    🧩 Tienda de Mods: Instalación directa de mods populares.
 
-    ⚙️ Configuración Visual: Edita server.properties con interruptores fáciles.
+    ⚙️ Configuración Visual: Edición gráfica de server.properties.
 
-    🔄 Smart Updater: Sistema de actualizaciones OTA integrado.
+    🔄 Smart Updater: Sistema OTA de actualizaciones sin reinstalar.
 
 🛠️ Solución de Problemas Frecuentes
+🔹 El panel no carga en el navegador
 
-El panel no carga en el navegador Asegúrate de abrir el puerto 3000 en tu firewall:
+Asegúrate de abrir el puerto 3000:
 
-    Linux (UFW): sudo ufw allow 3000/tcp
+Linux (UFW):
 
-    Windows: Asegúrate de dar permisos en la ventana emergente del Firewall de Windows al iniciar Node.js.
+sudo ufw allow 3000/tcp
 
-Error "command not found" o "$'\r'" (Linux) Si subiste los archivos manualmente desde Windows, es posible que tengan formato incorrecto. Ejecuta:
+Windows:
+
+    Cuando aparezca la ventana del Firewall, permite el acceso a Node.js.
+
+🔹 Error command not found o $'\r' (solo Linux)
+
+Si subiste los archivos desde Windows, puede que tengan formato CRLF.
+
+Solución:
+
 sed -i 's/\r$//' *.sh
 
 <div align="center">
 
-Desarrollado por ReyChampi Reportar un Bug
-
-</div>
+Desarrollado por ReyChampi
+Reportar un Bug
+</div> ``
