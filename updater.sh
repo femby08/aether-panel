@@ -1,51 +1,115 @@
 #!/bin/bash
 
 # ============================================================
-# AETHER PANEL - DIRECT UPDATER (Live Mode)
-# Estrategia: Descargar -> Descomprimir -> Sobrescribir -> Reiniciar
+# AETHER PANEL - UNIVERSAL INSTALLER (Multi-Distro)
+# Soporte: Debian, Ubuntu, Fedora, CentOS, Arch Linux, Manjaro
 # ============================================================
 
-LOG="/opt/aetherpanel/update.log"
 APP_DIR="/opt/aetherpanel"
-REPO_ZIP="https://github.com/reychampi/aether-panel/archive/refs/heads/main.zip"
+UPDATER_URL="https://raw.githubusercontent.com/reychampi/aether-panel/main/updater.sh"
+SERVICE_USER="root"
 
-# Función para registrar logs
-log() { echo "[$(date +'%T')] $1" >> $LOG; }
+# 1. VERIFICACIÓN DE ROOT
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Por favor, ejecuta este script como root (sudo)."
+  exit 1
+fi
 
-log "--- ⚡ ACTUALIZACIÓN DIRECTA INICIADA ---"
+echo "🌌 Iniciando instalación de Aether Panel..."
 
-# 1. Ir al directorio del panel
-cd "$APP_DIR" || { log "❌ Error: No encuentro el directorio"; exit 1; }
+# 2. DETECCIÓN DEL SISTEMA OPERATIVO
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    echo "❌ No se pudo detectar el sistema operativo."
+    exit 1
+fi
 
-# 2. Limpieza previa de temporales antiguos
-rm -rf update.zip aether-panel-main
+echo "🐧 Sistema detectado: $OS"
 
-# 3. Descargar la última versión
-log "⬇️ Descargando código..."
-curl -sL "$REPO_ZIP" -o update.zip
+# 3. INSTALACIÓN DE DEPENDENCIAS SEGÚN DISTRO
+case $OS in
+    ubuntu|debian|linuxmint)
+        echo "📦 Instalando dependencias para Debian/Ubuntu..."
+        apt-get update -qq
+        apt-get install -y -qq curl wget unzip git rsync default-jre
+        
+        if ! command -v node &> /dev/null; then
+            echo "📦 Instalando Node.js..."
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+            apt-get install -y -qq nodejs
+        fi
+        ;;
 
-# 4. Descomprimir
-log "📦 Descomprimiendo..."
-unzip -q -o update.zip
+    fedora|centos|rhel|almalinux|rocky)
+        echo "📦 Instalando dependencias para RHEL/Fedora..."
+        dnf install -y curl wget unzip git rsync java-latest-openjdk
+        
+        if ! command -v node &> /dev/null; then
+            echo "📦 Instalando Node.js..."
+            dnf install -y nodejs
+        fi
+        ;;
 
-# 5. Aplicar actualización (Sobrescribir archivos)
-log "♻️ Aplicando cambios..."
-# Copiamos el contenido de la carpeta descomprimida a la raíz
-cp -rf aether-panel-main/* .
+    arch|manjaro)
+        echo "📦 Instalando dependencias para Arch Linux..."
+        pacman -Sy --noconfirm curl wget unzip git rsync jre-openjdk nodejs
+        ;;
 
-# 6. Limpieza post-instalación
-rm -rf aether-panel-main update.zip
+    *)
+        echo "⚠️  Tu distribución ($OS) no está soportada oficialmente."
+        echo "    Instala manualmente: nodejs, java, git, unzip, curl, wget, rsync."
+        read -p "    ¿Continuar? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+        ;;
+esac
 
-# 7. Asegurar permisos de ejecución
-chmod +x updater.sh installserver.sh
+# 4. PREPARACIÓN DE DIRECTORIO
+mkdir -p "$APP_DIR/public"
+chown -R $SERVICE_USER:$SERVICE_USER "$APP_DIR"
 
-# 8. Actualizar dependencias (por si cambiaron)
-log "📚 Actualizando librerías..."
-npm install --production > /dev/null 2>&1
+# 5. DESCARGA DE ASSETS
+echo "🎨 Descargando recursos gráficos..."
+curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.svg" -o "$APP_DIR/public/logo.svg"
+curl -s -L "https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.ico" -o "$APP_DIR/public/logo.ico"
 
-# 9. Reiniciar el servicio para aplicar cambios
-# Este paso es el final. Al reiniciar, el panel nuevo tomará el control.
-log "🚀 Reiniciando servicio..."
-systemctl restart aetherpanel
+# 6. DESCARGA DEL UPDATER
+echo "⬇️  Descargando sistema de actualizaciones..."
+curl -H 'Cache-Control: no-cache' -s "$UPDATER_URL" -o "$APP_DIR/updater.sh"
+chmod +x "$APP_DIR/updater.sh"
+chown $SERVICE_USER:$SERVICE_USER "$APP_DIR/updater.sh"
 
-log "✅ ACTUALIZACIÓN COMPLETADA"
+# 7. CREACIÓN DEL SERVICIO SYSTEMD
+NODE_PATH=$(which node)
+echo "⚙️ Configurando servicio (Node en $NODE_PATH)..."
+cat > /etc/systemd/system/aetherpanel.service <<EOF
+[Unit]
+Description=Aether Panel Service
+After=network.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+WorkingDirectory=$APP_DIR
+ExecStart=$NODE_PATH server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable aetherpanel
+
+# 8. EJECUTAR INSTALACIÓN INICIAL
+echo "🚀 Ejecutando instalación del núcleo..."
+if [ "$SERVICE_USER" == "root" ]; then
+    bash "$APP_DIR/updater.sh"
+else
+    su -c "bash $APP_DIR/updater.sh" $SERVICE_USER
+fi
+
+echo "✅ Instalación completada. Aether Panel está listo en el puerto 3000."
