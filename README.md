@@ -1,6 +1,6 @@
 <div align="center">
 <h1 align="center">
-  <img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.png" alt="Logo" width="45" style="vertical-align: middle; margin-right: 10px;">
+  <img src="https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.png" alt="Logo" width="25" style="vertical-align: middle; margin-right: 10px;">
   Aether Panel
 </h1>
 
