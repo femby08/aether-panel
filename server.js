@@ -285,5 +285,13 @@ app.post('/api/backups/delete', (req, res) => { fs.unlinkSync(path.join(BACKUP_D
 app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e })); });
 
 io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
-
-server.listen(3000, () => console.log('Aether Panel V1.5.4 (Universal) running on port 3000'));
+// --- ARRANQUE CON INFORMACIÓN DE RED ---
+server.listen(3000, () => {
+    const ip = getServerIP();
+    console.log('\n==================================================');
+    console.log(`   🌌 Aether Panel V1.5.2 está en línea`);
+    console.log('==================================================');
+    console.log(`   👉 Local:   http://localhost:3000`);
+    console.log(`   👉 Red:     http://${ip}:3000`);
+    console.log('==================================================\n');
+});
