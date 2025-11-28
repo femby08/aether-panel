@@ -22,7 +22,7 @@ Gestión inteligente, monitoreo en tiempo real y diseño Glassmorphism.
 
 **Aether Panel** es una solución todo-en-uno para administrar servidores de Minecraft. Diseñado para ser visualmente impactante y técnicamente robusto, elimina la necesidad de configuraciones complejas, ofreciendo una interfaz web reactiva y fácil de usar tanto en **Linux** como en **Windows**.
 
-![Dashboard Preview](https://raw.githubusercontent.com/reychampi/aether-panel/main/public/logo.png)
+![Dashboard Preview](https://raw.githubusercontent.com/reychampi/aether-panel/main/public/panel.png)
 
 ---
 
