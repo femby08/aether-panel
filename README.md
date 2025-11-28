@@ -69,9 +69,9 @@ Aether Panel es **universal** y funciona en la mayoría de sistemas modernos.
 
 Ejecuta como **root**:
 
-```sh
+<pre>
 curl -sL https://raw.githubusercontent.com/reychampi/aether-panel/refs/heads/main/installserver.sh | bash
-
+</pre>
 🪟 Windows (PC / Server) — 🟡 No testeado todavía
 
     Descarga el repositorio (Code → Download ZIP).
@@ -130,4 +130,4 @@ sed -i 's/\r$//' *.sh
 
 Desarrollado por ReyChampi
 ¿Encontraste un error? Abre un Issue.
-</div> ```
+</div>
