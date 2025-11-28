@@ -1,6 +1,10 @@
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+const stream = require('stream');
+const { promisify } = require('util');
+const pipeline = promisify(stream.pipeline);
 
 class MCManager {
     constructor(io) {
@@ -40,12 +44,17 @@ class MCManager {
         
         let jar = fs.readdirSync(this.serverPath).find(f => f.endsWith('.jar') && !f.includes('installer'));
         if (!jar) jar = fs.readdirSync(this.serverPath).find(f => f.includes('forge') && f.endsWith('.jar'));
-        if (!jar) { this.io.emit('toast', { type: 'error', msg: 'No JAR found' }); return; }
+        
+        if (!jar) { 
+            this.io.emit('toast', { type: 'error', msg: 'No se encontró un núcleo (JAR)' }); 
+            return; 
+        }
         
         this.status = 'STARTING'; 
         this.io.emit('status_change', this.status); 
         this.log(`\r\n>>> AETHER: Iniciando con ${this.ram} RAM...\r\n`);
         
+        // java spawn sin rutas relativas complejas
         this.process = spawn('java', ['-Xmx'+this.ram, '-Xms'+this.ram, '-jar', jar, 'nogui'], { cwd: this.serverPath });
         
         this.process.stdout.on('data', d => { const s=d.toString(); this.log(s); if(s.includes('Done')||s.includes('For help')) { this.status='ONLINE'; this.io.emit('status_change', this.status); }});
@@ -60,12 +69,26 @@ class MCManager {
     async kill() { if(this.process) { this.process.kill('SIGKILL'); this.status='OFFLINE'; this.io.emit('status_change','OFFLINE'); }}
     sendCommand(c) { if(this.process) this.process.stdin.write(c+'\n'); }
     
+    // --- DESCARGA UNIVERSAL (JS PURO) ---
     async installJar(url, filename) {
-        this.io.emit('toast', {type:'info', msg:'Descargando núcleo...'}); this.log(`\r\nDescargando: ${url}\r\n`);
+        this.io.emit('toast', {type:'info', msg:'Descargando núcleo...'}); 
+        this.log(`\r\nDescargando: ${url}\r\n`);
+        
+        // Limpiar jars viejos
         fs.readdirSync(this.serverPath).forEach(f => { if(f.endsWith('.jar')) fs.unlinkSync(path.join(this.serverPath, f)); });
+        
         const target = path.join(this.serverPath, filename);
-        const cmd = `wget -q -O "${target}" "${url}"`;
-        return new Promise((resolve, reject) => { exec(cmd, (error) => { if (error) { this.io.emit('toast', {type:'error', msg:'Error al descargar'}); reject(error); } else { this.io.emit('toast', {type:'success', msg:'Instalado correctamente'}); resolve(); } }); });
+
+        try {
+            const response = await axios({ url, method: 'GET', responseType: 'stream' });
+            await pipeline(response.data, fs.createWriteStream(target));
+            
+            this.io.emit('toast', {type:'success', msg:'Instalado correctamente'});
+        } catch (error) {
+            this.io.emit('toast', {type:'error', msg:'Error en la descarga'});
+            this.log(`Error: ${error.message}`);
+            throw error;
+        }
     }
     
     readProperties() { try{return fs.readFileSync(path.join(this.serverPath,'server.properties'),'utf8').split('\n').reduce((a,l)=>{const[k,v]=l.split('=');if(k&&!l.startsWith('#'))a[k.trim()]=v?v.trim():'';return a;},{});}catch{return{};} }
