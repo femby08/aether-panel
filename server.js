@@ -12,7 +12,6 @@ const { exec, spawn } = require('child_process');
 const stream = require('stream');
 const { promisify } = require('util');
 
-// --- INICIALIZACIÓN ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -60,9 +59,7 @@ function getServerIP() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
         for (const net of interfaces[name]) {
-            if (net.family === 'IPv4' && !net.internal) {
-                return net.address;
-            }
+            if (net.family === 'IPv4' && !net.internal) return net.address;
         }
     }
     return '127.0.0.1';
@@ -72,60 +69,50 @@ function getServerIP() {
 //                 RUTAS API
 // ==========================================
 
-// --- API DE RED (IP) ---
+// --- API RED ---
 app.get('/api/network', (req, res) => {
-    let port = 25565;
-    let customDomain = null;
+    let port = 25565; let customDomain = null;
     try {
         const props = fs.readFileSync(path.join(SERVER_DIR, 'server.properties'), 'utf8');
         const match = props.match(/server-port=(\d+)/);
         if (match) port = match[1];
-        
         const settingsPath = path.join(__dirname, 'settings.json');
         if (fs.existsSync(settingsPath)) {
             const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
             customDomain = settings.custom_domain || null;
         }
     } catch (e) {}
-
-    res.json({ 
-        ip: getServerIP(), 
-        port: port,
-        custom_domain: customDomain
-    });
+    res.json({ ip: getServerIP(), port: port, custom_domain: customDomain });
 });
 
-// --- INFO DEL SISTEMA ---
+// --- INFO ---
 app.get('/api/info', (req, res) => {
-    try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-        res.json({ version: pkg.version });
-    } catch (e) { res.json({ version: 'Unknown' }); }
+    try { const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')); res.json({ version: pkg.version }); } 
+    catch (e) { res.json({ version: 'Unknown' }); }
 });
 
-// --- SISTEMA DE ACTUALIZACIONES (ANTI-CACHÉ + SYSTEMD-RUN) ---
+// --- ACTUALIZACIONES (SISTEMA ROBUSTO CON SYSTEMD-RUN) ---
 app.get('/api/update/check', async (req, res) => {
     try {
         const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
         let remotePkg;
 
         try {
-            // INTENTO 1: API OFICIAL (Rápida, sin caché)
+            // 1. Intentar API oficial (Sin caché)
             const remoteResponse = (await apiClient.get(GH_API_URL)).data;
             const content = Buffer.from(remoteResponse.content, 'base64').toString();
             remotePkg = JSON.parse(content);
         } catch (apiError) {
-            // INTENTO 2: FALLBACK A RAW (Si la API falla)
-            console.warn("GitHub API limit hit, switching to RAW:", apiError.message);
+            // 2. Fallback a RAW si la API falla
+            console.warn("GitHub API error, usando RAW:", apiError.message);
             remotePkg = (await apiClient.get(`${REPO_RAW}/package.json?t=${Date.now()}`)).data;
         }
         
-        // 1. Hard Update
         if (remotePkg.version !== localPkg.version) {
             return res.json({ type: IS_WIN ? 'manual' : 'hard', local: localPkg.version, remote: remotePkg.version });
         }
 
-        // 2. Soft Update
+        // Soft Update Check
         const files = ['public/index.html', 'public/style.css', 'public/app.js'];
         let hasChanges = false;
         for (const f of files) {
@@ -134,34 +121,33 @@ app.get('/api/update/check', async (req, res) => {
                 const localPath = path.join(__dirname, f);
                 if (fs.existsSync(localPath)) {
                     const localContent = fs.readFileSync(localPath, 'utf8');
-                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) {
-                        hasChanges = true; break;
-                    }
+                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) { hasChanges = true; break; }
                 }
             } catch(e) {}
         }
-
+        
         if (hasChanges) return res.json({ type: 'soft', local: localPkg.version, remote: remotePkg.version });
         res.json({ type: 'none' });
 
     } catch (e) {
-        console.error("UPDATE CHECK FAILED:", e.message); 
-        res.status(500).json({ error: 'Update Check Failed' });
+        console.error("UPDATE CHECK ERROR:", e.message);
+        res.status(500).json({ error: 'Error checking updates' });
     }
 });
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
     
+    // --- HARD UPDATE (EL FIX IMPORTANTE) ---
     if (type === 'hard') {
-        io.emit('toast', { type: 'warning', msg: '🔄 Iniciando actualización del sistema...' });
+        io.emit('toast', { type: 'warning', msg: '🔄 Lanzando actualizador independiente...' });
         
         let cmd, args;
         if (IS_WIN) {
             cmd = 'cmd.exe';
             args = ['/c', 'start', 'updater.bat'];
         } else {
-            // TRUCO DE ORO: Usar systemd-run para que el proceso sobreviva al cierre de Node
+            // EN LINUX: USAMOS SYSTEMD-RUN PARA QUE EL PROCESO NO MUERA CON EL SERVIDOR
             cmd = 'systemd-run';
             args = [
                 '--unit=aether-updater-' + Date.now(),
@@ -171,16 +157,14 @@ app.post('/api/update/perform', async (req, res) => {
             ];
         }
 
-        // Ejecutamos el comando blindado
         const updater = spawn(cmd, args, { detached: true, stdio: 'ignore' });
         updater.unref();
         
         res.json({ success: true, mode: 'hard' });
-        
-        // Opcional: Salir para liberar recursos, el updater nos reiniciará
-        // setTimeout(() => process.exit(0), 2000);
-        
-    } else if (type === 'soft') {
+        // No hacemos exit() aquí, dejamos que el updater nos mate al reiniciar el servicio
+    } 
+    // --- SOFT UPDATE ---
+    else if (type === 'soft') {
         io.emit('toast', { type: 'info', msg: '🎨 Actualizando visuales...' });
         try {
             const files = ['public/index.html', 'public/style.css', 'public/app.js'];
@@ -194,49 +178,33 @@ app.post('/api/update/perform', async (req, res) => {
             try { await dl(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public/logo.ico')); } catch(e){}
             
             res.json({ success: true, mode: 'soft' });
-        } catch (e) { 
-            res.status(500).json({ error: e.message }); 
-        }
+        } catch (e) { res.status(500).json({ error: e.message }); }
     }
 });
 
-// --- AJUSTES (RAM & DOMAIN) ---
+// --- AJUSTES Y MINECRAFT ---
 app.post('/api/settings', (req, res) => {
     try {
         const { ram, custom_domain } = req.body;
         let settings = {};
         const settingsPath = path.join(__dirname, 'settings.json');
-        if (fs.existsSync(settingsPath)) {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        }
-
+        if (fs.existsSync(settingsPath)) settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
         if (ram) settings.ram = ram;
-        settings.custom_domain = custom_domain || null; // Puede ser null para borrarlo
-        
+        if (custom_domain !== undefined) settings.custom_domain = custom_domain;
         fs.writeFileSync(settingsPath, JSON.stringify(settings));
-
         mcServer.loadSettings();
-        res.json({ success: true, ram: settings.ram, custom_domain: settings.custom_domain });
-
+        res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/settings', (req, res) => {
-    try {
-        let settings = { ram: '4G', custom_domain: null };
-        const settingsPath = path.join(__dirname, 'settings.json');
-        if(fs.existsSync(settingsPath)) {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        }
-        res.json(settings);
-    } catch(e) { res.json({ ram: '4G', custom_domain: null }); }
+    try { if(fs.existsSync(path.join(__dirname, 'settings.json'))) res.json(JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'))); else res.json({ ram: '4G' }); } catch(e) { res.json({ ram: '4G' }); }
 });
 
-// --- RESOLUCIÓN VERSIONES ---
+// --- RESOLVERS ---
 app.post('/api/nebula/versions', async (req, res) => {
     try {
-        const t = req.body.type;
-        let l = [];
+        const t = req.body.type; let l = [];
         if (t === 'vanilla') l = (await apiClient.get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')).data.versions.filter(v => v.type === 'release').map(v => ({ id: v.id, url: v.url, type: 'vanilla' }));
         else if (t === 'paper') l = (await apiClient.get('https://api.papermc.io/v2/projects/paper')).data.versions.reverse().map(v => ({ id: v, type: 'paper' }));
         else if (t === 'fabric') l = (await apiClient.get('https://meta.fabricmc.net/v2/versions/game')).data.filter(v => v.stable).map(v => ({ id: v.version, type: 'fabric' }));
@@ -261,14 +229,11 @@ app.post('/api/nebula/resolve-forge', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Forge Resolve Failed' }); }
 });
 
-// --- INSTALACIÓN ---
 app.post('/api/install', async (req, res) => { try { await mcServer.installJar(req.body.url, req.body.filename); res.json({ success: true }); } catch (e) { res.status(500).json({}); } });
-
 app.post('/api/mods/install', async (req, res) => {
     const { url, name } = req.body; const d = path.join(SERVER_DIR, 'mods');
     if (!fs.existsSync(d)) fs.mkdirSync(d);
     io.emit('toast', { type: 'info', msg: `Instalando ${name}...` });
-    
     try {
         const response = await axios({ url, method: 'GET', responseType: 'stream' });
         await pipeline(response.data, fs.createWriteStream(path.join(d, name.replace(/\s+/g, '_') + '.jar')));
@@ -277,37 +242,29 @@ app.post('/api/mods/install', async (req, res) => {
     } catch(e) { res.json({ success: false }); }
 });
 
-// --- MONITOR ---
 app.get('/api/stats', (req, res) => {
     osUtils.cpuUsage((cpuPercent) => {
         let diskBytes = 0;
         if(!IS_WIN) {
-            // Comando nativo Linux para precisión
             exec(`du -sb ${SERVER_DIR}`, (error, stdout) => {
                 if (!error && stdout) diskBytes = parseInt(stdout.split(/\s+/)[0]);
                 sendStats(cpuPercent, diskBytes, res);
             });
         } else {
-            // Fallback Windows
             sendStats(cpuPercent, getDirSize(SERVER_DIR), res);
         }
     });
 });
-
 function sendStats(cpuPercent, diskBytes, res) {
     const cpus = os.cpus();
-    const cpuFreq = cpus.length > 0 ? cpus[0].speed : 0;
-    const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-
     res.json({
         cpu: cpuPercent * 100,
-        cpu_freq: cpuFreq,
-        ram_total: totalMem,
-        ram_free: freeMem,
-        ram_used: totalMem - freeMem,
+        cpu_freq: cpus.length > 0 ? cpus[0].speed : 0,
+        ram_total: os.totalmem(),
+        ram_free: os.freemem(),
+        ram_used: os.totalmem() - os.freemem(),
         disk_used: diskBytes,
-        disk_total: 20 * 1024 * 1024 * 1024 
+        disk_total: 20 * 1024 * 1024 * 1024
     });
 }
 
@@ -327,7 +284,6 @@ app.post('/api/files/read', (req, res) => { const p = path.join(SERVER_DIR, req.
 app.post('/api/files/save', (req, res) => { fs.writeFileSync(path.join(SERVER_DIR, req.body.file.replace(/\.\./g, '')), req.body.content); res.json({ success: true }); });
 app.post('/api/files/upload', upload.single('file'), (req, res) => { if (req.file) { fs.renameSync(req.file.path, path.join(SERVER_DIR, req.file.originalname)); res.json({ success: true }); } else res.json({ success: false }); });
 
-// --- CONFIG & BACKUPS ---
 app.get('/api/config', (req, res) => res.json(mcServer.readProperties()));
 app.post('/api/config', (req, res) => { mcServer.writeProperties(req.body); res.json({ success: true }); });
 
@@ -336,16 +292,6 @@ app.post('/api/backups/create', (req, res) => { exec(`tar -czf "${path.join(BACK
 app.post('/api/backups/delete', (req, res) => { fs.unlinkSync(path.join(BACKUP_DIR, req.body.name)); res.json({ success: true }); });
 app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e })); });
 
-// --- SOCKET.IO ---
-io.on('connection', (s) => { 
-    s.emit('logs_history', mcServer.getRecentLogs()); 
-    s.emit('status_change', mcServer.status); 
-    s.on('command', (c) => mcServer.sendCommand(c)); 
-});
+io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
 
-// --- ARRANQUE ---
-server.listen(3000, () => {
-    const ip = getServerIP();
-    console.log(`Aether Panel V1.6.0 running on port 3000`);
-    console.log(`Access: http://${ip}:3000`);
-});
+server.listen(3000, () => console.log('Aether Panel V1.6.0 Stable running on port 3000'));
