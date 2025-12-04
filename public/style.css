@@ -209,6 +209,19 @@ body::after { background: #0ea5e9; bottom: -150px; right: -150px; animation-dela
 [data-design="material"] .brand-logo { box-shadow: none; }
 .brand-name { font-weight: 800; font-size: 1.2rem; letter-spacing: 1px; color: var(--txt); white-space: nowrap; }
 
+.version-badge { 
+    font-size: 0.75rem; 
+    color: var(--muted); 
+    font-weight: 600; 
+    font-family: 'JetBrains Mono', monospace; 
+    background: rgba(128,128,128,0.15); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    border: 1px solid rgba(255,255,255,0.1); 
+    margin-left: auto; /* Empuja a la derecha */
+}
+[data-design="material"] .version-badge { border: none; }
+
 nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; }
 .nav-label { font-size: 0.7rem; color: var(--muted); font-weight: 800; margin: 24px 0 10px 14px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; white-space: nowrap; }
 
@@ -343,7 +356,7 @@ header { display: flex; justify-content: space-between; align-items: center; mar
     display: flex; 
     flex-direction: column; 
     position: relative; 
-    overflow: visible; /* FIXED: permite crecer */
+    overflow: visible; /* IMPORTANTE: Para que no corte contenido */
     height: auto; 
     min-height: 200px;
 }
@@ -354,10 +367,10 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 [data-design="material"] .stat-big, [data-theme="light"] .stat-big { text-shadow: none; }
 .chart-mini { height: 140px; width: 100%; margin-top: auto; opacity: 0.8; mask-image: linear-gradient(to bottom, black, transparent); -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%); }
 
-/* --- ESTILOS DE AJUSTES (CORREGIDO) --- */
+/* --- ESTILOS DE AJUSTES --- */
 .cfg-grid { 
     display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
     gap: 20px; 
     margin-top: 20px;
     padding-bottom: 20px;
