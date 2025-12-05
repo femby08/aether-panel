@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: server.js
-fullContent:
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -299,4 +295,3 @@ app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); ex
 io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
 
 server.listen(3000, () => console.log('Aether Panel V1.6.0 Stable running on port 3000'));
-}
