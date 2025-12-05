@@ -34,10 +34,14 @@ app.use(express.json());
 // --- GESTOR MINECRAFT ---
 const mcServer = new MCManager(io);
 
-// --- CLIENTE API GITHUB ---
+// --- CLIENTE API GITHUB [UPDATED] ---
 const apiClient = axios.create({ headers: { 'User-Agent': 'Aether-Panel/1.6.0' }, timeout: 10000 });
-const REPO_RAW = 'https://raw.githubusercontent.com/reychampi/aether-panel/main';
-const GH_API_URL = 'https://api.github.com/repos/reychampi/aether-panel/contents/package.json?ref=main';
+// [CHANGE] Updated Repo URLs
+const REPO_OWNER = 'femby08';
+const REPO_NAME = 'aether-panel';
+const REPO_RAW = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main`;
+const GH_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/package.json?ref=main`;
+const REPO_ZIP = `https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/heads/main.zip`;
 
 // --- UTILIDADES ---
 
@@ -71,12 +75,11 @@ function getServerIP() {
     return '127.0.0.1';
 }
 
-// 3. Enviar Estadísticas (Función Corregida y Separada)
+// 3. Enviar Estadísticas
 function sendStats(cpuPercent, diskBytes, res) {
     const cpus = os.cpus();
     let cpuSpeed = cpus.length > 0 ? cpus[0].speed : 0;
 
-    // FIX: Detectar MHz reales en VPS Linux si Node falla
     if (cpuSpeed === 0 && !IS_WIN) {
         try {
             const cpuInfo = fs.readFileSync('/proc/cpuinfo', 'utf8');
@@ -92,7 +95,7 @@ function sendStats(cpuPercent, diskBytes, res) {
         ram_free: os.freemem(),
         ram_used: os.totalmem() - os.freemem(),
         disk_used: diskBytes,
-        disk_total: 20 * 1024 * 1024 * 1024 // 20GB Límite Visual
+        disk_total: 20 * 1024 * 1024 * 1024
     });
 }
 
@@ -159,30 +162,63 @@ app.get('/api/update/check', async (req, res) => {
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
+    
+    // --- HARD UPDATE ---
     if (type === 'hard') {
         if(IS_WIN) {
             const updater = spawn('cmd.exe', ['/c', 'start', 'updater.bat'], { detached: true, stdio: 'ignore' });
             updater.unref();
         } else {
-            io.emit('toast', { type: 'warning', msg: '🔄 Actualizando sistema...' });
-            // Systemd-run para evitar muerte prematura
+            io.emit('toast', { type: 'warning', msg: '🔄 Actualizando sistema completo...' });
             const updater = spawn('systemd-run', ['--unit=aether-update-'+Date.now(), '/bin/bash', '/opt/aetherpanel/updater.sh'], { detached: true, stdio: 'ignore' });
             updater.unref();
         }
         res.json({ success: true, mode: 'hard' });
+
+    // --- SOFT UPDATE [MEJORADO] ---
     } else if (type === 'soft') {
-        io.emit('toast', { type: 'info', msg: '🎨 Actualizando visuales...' });
+        io.emit('toast', { type: 'info', msg: '🎨 Actualizando interfaz (Hot Swap)...' });
+        
         try {
-            const files = ['public/index.html', 'public/style.css', 'public/app.js'];
-            for (const f of files) {
-                const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
-                fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
+            // METODO ROBUSTO (LINUX): Descargar ZIP completo y extraer /public
+            if (!IS_WIN) {
+                // Descarga ZIP -> Unzip en tmp -> Mueve public -> Limpia
+                // Esto asegura que se traigan TODOS los archivos nuevos (imágenes, fonts, etc.)
+                const cmd = `
+                    mkdir -p /tmp/aether_soft && \
+                    wget -q "${REPO_ZIP}" -O /tmp/aether_soft/update.zip && \
+                    unzip -q -o /tmp/aether_soft/update.zip -d /tmp/aether_soft/extracted && \
+                    cp -rf /tmp/aether_soft/extracted/*/public/* "${path.join(__dirname, 'public')}" && \
+                    rm -rf /tmp/aether_soft
+                `;
+                
+                exec(cmd, (error, stdout, stderr) => {
+                    if (error) {
+                        console.error("Soft Update Exec Error:", stderr);
+                        throw error;
+                    }
+                    res.json({ success: true, mode: 'soft' });
+                });
+
+            // FALLBACK (WINDOWS / NODE PURO): Método antiguo archivo por archivo
+            } else {
+                const files = ['public/index.html', 'public/style.css', 'public/app.js'];
+                for (const f of files) {
+                    const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
+                    fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
+                }
+                // Intentar descargar assets extra comunes
+                async function dl(u, p) { try { const r = await axios({url:u, method:'GET', responseType:'stream'}); await pipeline(r.data, fs.createWriteStream(p)); } catch(e){} }
+                await dl(`${REPO_RAW}/public/logo.svg`, path.join(__dirname, 'public/logo.svg'));
+                await dl(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public/logo.ico'));
+                
+                res.json({ success: true, mode: 'soft' });
             }
-            async function dl(u, p) { const r = await axios({url:u, method:'GET', responseType:'stream'}); await pipeline(r.data, fs.createWriteStream(p)); }
-            try { await dl(`${REPO_RAW}/public/logo.svg`, path.join(__dirname, 'public/logo.svg')); } catch(e){}
-            try { await dl(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public/logo.ico')); } catch(e){}
-            res.json({ success: true, mode: 'soft' });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+
+        } catch (e) { 
+            console.error("Soft update failed:", e);
+            res.status(500).json({ error: e.message }); 
+        }
     }
 });
 
@@ -244,7 +280,7 @@ app.post('/api/mods/install', async (req, res) => {
     } catch(e) { res.json({ success: false }); }
 });
 
-// --- MONITOR (Llamada a función separada) ---
+// --- MONITOR ---
 app.get('/api/stats', (req, res) => {
     osUtils.cpuUsage((cpuPercent) => {
         let diskBytes = 0;
