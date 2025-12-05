@@ -4,6 +4,8 @@
     --p-light: #a78bfa;
     --p-dark: #7c3aed;
     --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
     
     /* --- TEMA OSCURO (DEFAULT - GLASS) --- */
     --bg: #050507;
