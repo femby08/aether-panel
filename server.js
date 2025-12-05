@@ -1,3 +1,4 @@
+{
 type: uploaded file
 fileName: server.js
 fullContent:
@@ -33,7 +34,7 @@ if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 // --- MIDDLEWARE & CACHE CONTROL (FIX: Evita caché antigua en updates) ---
 app.use(express.static(path.join(__dirname, 'public'), {
     setHeaders: function (res, path) {
-        // Obliga al navegador a no guardar caché de los archivos estáticos
+        // Obliga al navegador a no guardar caché de los archivos estáticos para ver cambios al instante
         res.set("Cache-Control", "no-cache, no-store, must-revalidate");
         res.set("Pragma", "no-cache");
         res.set("Expires", "0");
@@ -154,7 +155,7 @@ app.get('/api/update/check', async (req, res) => {
         let hasChanges = false;
         for (const f of files) {
             try {
-                // FIX: responseType text para evitar corrupción de JSON
+                // FIX: responseType text para evitar errores de parseo
                 const remoteContent = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`, { responseType: 'text' })).data;
                 const localPath = path.join(__dirname, f);
                 if (fs.existsSync(localPath)) {
@@ -298,3 +299,4 @@ app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); ex
 io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
 
 server.listen(3000, () => console.log('Aether Panel V1.6.0 Stable running on port 3000'));
+}
