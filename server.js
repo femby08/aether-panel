@@ -36,7 +36,6 @@ const mcServer = new MCManager(io);
 
 // --- CLIENTE API GITHUB [CONFIGURACIÓN] ---
 const apiClient = axios.create({ headers: { 'User-Agent': 'Aether-Panel/1.6.0' }, timeout: 10000 });
-// REPOSITORIO CONFIGURADO: femby08/aether-panel
 const REPO_OWNER = 'femby08';
 const REPO_NAME = 'aether-panel';
 const BRANCH = 'main';
@@ -46,7 +45,7 @@ const REPO_ZIP = `https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/hea
 
 // --- UTILIDADES ---
 
-// 1. Calcular tamaño directorio (Fallback)
+// 1. Calcular tamaño directorio
 const getDirSize = (dirPath) => {
     let size = 0;
     try {
@@ -126,7 +125,7 @@ app.get('/api/info', (req, res) => {
     catch (e) { res.json({ version: 'Unknown' }); }
 });
 
-// --- ACTUALIZADOR (CORE LOGIC) ---
+// --- ACTUALIZADOR ---
 app.get('/api/update/check', async (req, res) => {
     try {
         const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
@@ -136,17 +135,13 @@ app.get('/api/update/check', async (req, res) => {
             const content = Buffer.from(remoteResponse.content, 'base64').toString();
             remotePkg = JSON.parse(content);
         } catch (apiError) {
-            console.warn("GitHub API limit hit, switching to RAW:", apiError.message);
-            // Fallback a RAW con timestamp para evitar caché de GitHub
             remotePkg = (await apiClient.get(`${REPO_RAW}/package.json?t=${Date.now()}`)).data;
         }
         
-        // Si hay cambio de versión -> HARD UPDATE
         if (remotePkg.version !== localPkg.version) {
             return res.json({ type: IS_WIN ? 'manual' : 'hard', local: localPkg.version, remote: remotePkg.version });
         }
 
-        // Si la versión es igual, comprobamos cambios visuales (Soft Check)
         const files = ['public/index.html', 'public/style.css', 'public/app.js'];
         let hasChanges = false;
         for (const f of files) {
@@ -155,7 +150,6 @@ app.get('/api/update/check', async (req, res) => {
                 const localPath = path.join(__dirname, f);
                 if (fs.existsSync(localPath)) {
                     const localContent = fs.readFileSync(localPath, 'utf8');
-                    // Comprobación simple de contenido
                     if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) { hasChanges = true; break; }
                 }
             } catch(e) {}
@@ -167,8 +161,6 @@ app.get('/api/update/check', async (req, res) => {
 
 app.post('/api/update/perform', async (req, res) => {
     const { type } = req.body;
-    
-    // --- HARD UPDATE (Reinicia el servicio) ---
     if (type === 'hard') {
         if(IS_WIN) {
             const updater = spawn('cmd.exe', ['/c', 'start', 'updater.bat'], { detached: true, stdio: 'ignore' });
@@ -179,67 +171,31 @@ app.post('/api/update/perform', async (req, res) => {
             updater.unref();
         }
         res.json({ success: true, mode: 'hard' });
-
-    // --- SOFT UPDATE (Sin reinicio) ---
     } else if (type === 'soft') {
         io.emit('toast', { type: 'info', msg: '🎨 Descargando interfaz...' });
-        
         try {
             if (!IS_WIN) {
-                // SCRIPT ROBUSTO DE ACTUALIZACIÓN VISUAL
-                // 1. Usa curl o wget. 2. Descomprime. 3. Busca la carpeta correcta. 4. Copia.
                 const script = `
-                    rm -rf /tmp/aup_temp
-                    mkdir -p /tmp/aup_temp
-                    
-                    echo "Descargando..."
+                    rm -rf /tmp/aup_temp && mkdir -p /tmp/aup_temp
                     curl -L -f -s "${REPO_ZIP}" -o /tmp/aup_temp/update.zip || wget -q "${REPO_ZIP}" -O /tmp/aup_temp/update.zip
-                    
-                    if [ ! -f /tmp/aup_temp/update.zip ]; then echo "Error: Fallo descarga ZIP"; exit 1; fi
-                    
-                    echo "Descomprimiendo..."
                     unzip -q -o /tmp/aup_temp/update.zip -d /tmp/aup_temp/extract
-                    
-                    # Detectar carpeta interna (ej: aether-panel-main) dinámicamente
                     DIR=$(ls /tmp/aup_temp/extract | head -n 1)
-                    SOURCE="/tmp/aup_temp/extract/$DIR/public"
-                    
-                    if [ ! -d "$SOURCE" ]; then echo "Error: Carpeta public no encontrada en $DIR"; exit 1; fi
-                    
-                    echo "Aplicando cambios..."
-                    cp -rf "$SOURCE/"* "${path.join(__dirname, 'public')}/"
+                    cp -rf "/tmp/aup_temp/extract/$DIR/public/"* "${path.join(__dirname, 'public')}/"
                     rm -rf /tmp/aup_temp
-                    echo "Success"
                 `;
-                
-                exec(script, (error, stdout, stderr) => {
-                    if (error || stderr.includes('Error:')) {
-                        console.error("Soft Update Failed:", stderr || stdout);
-                        io.emit('toast', { type: 'error', msg: '❌ Error al actualizar. Revisa logs.' });
-                    } else {
-                        console.log("Soft Update Success:", stdout);
-                        io.emit('toast', { type: 'success', msg: '✅ Interfaz actualizada. Recargando...' });
-                    }
+                exec(script, (error) => {
+                    io.emit('toast', { type: error ? 'error' : 'success', msg: error ? '❌ Error' : '✅ Interfaz actualizada' });
                     res.json({ success: !error, mode: 'soft' });
                 });
-
             } else {
-                // Fallback Windows (Archivo por archivo)
                 const files = ['public/index.html', 'public/style.css', 'public/app.js'];
                 for (const f of files) {
                     const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
                     fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
                 }
-                async function dl(u, p) { try { const r = await axios({url:u, method:'GET', responseType:'stream'}); await pipeline(r.data, fs.createWriteStream(p)); } catch(e){} }
-                await dl(`${REPO_RAW}/public/logo.svg`, path.join(__dirname, 'public/logo.svg'));
-                await dl(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public/logo.ico'));
                 res.json({ success: true, mode: 'soft' });
             }
-
-        } catch (e) { 
-            console.error("Soft update exception:", e);
-            res.status(500).json({ error: e.message }); 
-        }
+        } catch (e) { res.status(500).json({ error: e.message }); }
     }
 });
 
@@ -338,6 +294,40 @@ app.post('/api/backups/create', (req, res) => { exec(`tar -czf "${path.join(BACK
 app.post('/api/backups/delete', (req, res) => { fs.unlinkSync(path.join(BACKUP_DIR, req.body.name)); res.json({ success: true }); });
 app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e })); });
 
+// ==========================================
+//           WHITELIST SYSTEM (NUEVO)
+// ==========================================
+app.get('/api/whitelist', (req, res) => {
+    const wlPath = path.join(SERVER_DIR, 'whitelist.json');
+    try {
+        if (fs.existsSync(wlPath)) {
+            const data = JSON.parse(fs.readFileSync(wlPath, 'utf8'));
+            res.json(data);
+        } else {
+            res.json([]);
+        }
+    } catch(e) { res.json([]); }
+});
+
+app.post('/api/whitelist/add', (req, res) => {
+    const { user } = req.body;
+    mcServer.sendCommand(`whitelist add ${user}`);
+    res.json({ success: true });
+});
+
+app.post('/api/whitelist/remove', (req, res) => {
+    const { user } = req.body;
+    mcServer.sendCommand(`whitelist remove ${user}`);
+    res.json({ success: true });
+});
+
+app.post('/api/whitelist/toggle', (req, res) => {
+    const { enabled } = req.body;
+    mcServer.sendCommand(enabled ? 'whitelist on' : 'whitelist off');
+    res.json({ success: true });
+});
+
+// --- SOCKET.IO LOGS ---
 io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
 
 server.listen(3000, () => console.log('Aether Panel V1.6.0 Stable running on port 3000'));
