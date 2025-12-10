@@ -1,6 +1,7 @@
 const socket = io();
 let currentPath = '';
 let wlData = []; 
+let selectedVerData = null; // Variable para guardar la versión seleccionada antes de instalar
 
 // --- 1. INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -299,7 +300,7 @@ function setAccentMode(mode) {
 }
 
 // --- 8. FUNCIONES MOCK (Archivos, Updates, etc) ---
-// Estas funciones se mantienen simples para no alargar demasiado el código.
+
 function loadFileBrowser(p) { currentPath = p; api('files?path='+p).then(data => {
     const list = document.getElementById('file-list');
     list.innerHTML = '';
@@ -333,6 +334,110 @@ function forceUIUpdate() { location.reload(); }
 function createBackup() { api('backups/create').then(() => loadBackups()); }
 function loadBackups() { api('backups').then(d => { document.getElementById('backup-list').innerHTML = d.map(b => `<div class="file-row"><span>${b.name}</span><span>${b.size}</span></div>`).join(''); }); }
 
-// Funciones vacías para evitar errores si se llaman desde HTML antiguo
-function loadVersions() {}
-function openModStore() {}
+
+// --- 9. SISTEMA DE VERSIONES E INSTALACIÓN (IMPLEMENTADO) ---
+
+function loadVersions(type) {
+    Toastify({text: "Obteniendo versiones...", style:{background:"var(--p)"}}).showToast();
+    
+    api('nebula/versions', { type }).then(data => {
+        const list = document.getElementById('version-list');
+        list.innerHTML = '';
+        
+        if(!data || data.length === 0) {
+            list.innerHTML = '<p style="color:var(--muted); grid-column: 1/-1; text-align:center;">No se encontraron versiones disponibles.</p>';
+            return;
+        }
+
+        data.forEach(v => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.style.cssText = 'justify-content: space-between; font-family: "JetBrains Mono"; font-size: 0.9rem;';
+            
+            // v.id es la versión (ej: "1.20.4")
+            btn.innerHTML = `<span>${v.id}</span> <i class="fa-solid fa-cloud-arrow-down"></i>`;
+            
+            btn.onclick = () => {
+                // Guardamos la info y abrimos el modal de RAM
+                selectedVerData = { ...v, type }; // Guardamos tipo y version
+                document.getElementById('version-modal').style.display = 'none';
+                document.getElementById('ram-modal').style.display = 'flex';
+                
+                // Actualizar texto visual del modal RAM
+                document.querySelector('#ram-modal h3').innerHTML = `<i class="fa-solid fa-microchip"></i> Instalar ${type} ${v.id}`;
+            };
+            
+            list.appendChild(btn);
+        });
+
+        document.getElementById('version-modal').style.display = 'flex';
+    }).catch(err => {
+        console.error(err);
+        Toastify({text: "Error al conectar con la API de versiones", style:{background:"#ef4444"}}).showToast();
+    });
+}
+
+function confirmInstall() {
+    if (!selectedVerData) return;
+    
+    // 1. Obtener RAM del slider
+    const ramVal = document.getElementById('ram-slider').value;
+    const ramStr = ramVal + "G";
+    
+    // 2. Cerrar modal y notificar
+    document.getElementById('ram-modal').style.display = 'none';
+    Toastify({text: `Configurando ${ramStr} RAM e instalando...`, style:{background:"var(--p)"}}).showToast();
+    
+    // 3. Guardar RAM primero
+    api('settings', { ram: ramStr }).then(() => {
+        
+        // 4. Resolver URL de descarga según el tipo
+        const type = selectedVerData.type;
+        const ver = selectedVerData.id;
+        
+        // Función helper para enviar la orden de instalación al backend
+        const sendInstall = (url, filename) => {
+            api('install', { url, filename }).then(res => {
+                if(!res.success) Toastify({text: "Error al iniciar instalación", style:{background:"#ef4444"}}).showToast();
+            });
+        };
+
+        if (type === 'vanilla') {
+            api('nebula/resolve-vanilla', { url: selectedVerData.url }).then(res => {
+                if(res.url) sendInstall(res.url, 'server.jar');
+            });
+        } 
+        else if (type === 'paper') {
+            // Resolver última build de Paper dinámicamente
+            fetch(`https://api.papermc.io/v2/projects/paper/versions/${ver}`)
+                .then(r => r.json())
+                .then(d => {
+                    if(!d.builds) { Toastify({text: "Error al obtener builds de Paper", style:{background:"#ef4444"}}).showToast(); return; }
+                    const latestBuild = d.builds[d.builds.length - 1];
+                    const jarName = `paper-${ver}-${latestBuild}.jar`;
+                    const url = `https://api.papermc.io/v2/projects/paper/versions/${ver}/builds/${latestBuild}/downloads/${jarName}`;
+                    sendInstall(url, 'server.jar');
+                });
+        } 
+        else if (type === 'fabric') {
+            // Resolver loader estable de Fabric
+            fetch('https://meta.fabricmc.net/v2/versions/loader')
+                .then(r => r.json())
+                .then(d => {
+                    const stableLoader = d.find(l => l.stable).version;
+                    const url = `https://meta.fabricmc.net/v2/versions/loader/${ver}/${stableLoader}/server/jar`;
+                    sendInstall(url, 'server.jar');
+                });
+        } 
+        else if (type === 'forge') {
+            api('nebula/resolve-forge', { version: ver }).then(res => {
+                if(res.url) sendInstall(res.url, 'server.jar'); // El manager lo renombra si es installer
+                else Toastify({text: "No se encontró instalador para esta versión", style:{background:"#ef4444"}}).showToast();
+            });
+        }
+    });
+}
+
+function openModStore() {
+    Toastify({text: "La tienda de mods estará disponible en la V1.7.0", style:{background:"#3b82f6"}}).showToast();
+}
