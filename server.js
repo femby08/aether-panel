@@ -8,8 +8,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Configuración
-app.use(express.static(__dirname)); // Sirve tus archivos HTML/CSS/JS actuales
+// --- CONFIGURACIÓN CLAVE ---
+// Aquí está el arreglo: __dirname + 'public'
+// Esto le dice al servidor que busque el index.html DENTRO de la carpeta public
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // --- ESTADO SIMULADO ---
@@ -19,7 +21,7 @@ const WHITELIST_FILE = path.join(__dirname, 'whitelist.json');
 // --- RUTAS API ---
 
 // 1. Info básica
-app.get('/api/info', (req, res) => res.json({ version: '1.6.0-Standalone' }));
+app.get('/api/info', (req, res) => res.json({ version: '1.6.0-Custom' }));
 app.get('/api/network', (req, res) => res.json({ ip: '127.0.0.1', port: 25565 }));
 
 // 2. Control de Energía (Simulación)
@@ -30,7 +32,6 @@ app.post('/api/power/start', (req, res) => {
     io.emit('status_change', 'STARTING');
     io.emit('console_data', '\x1b[33m[System] Iniciando secuencia de arranque...\r\n');
     
-    // Simular carga (3 segundos)
     setTimeout(() => {
         io.emit('console_data', '[Server] Cargando librerias, espera...\r\n');
     }, 1500);
@@ -79,8 +80,8 @@ app.post('/api/power/kill', (req, res) => {
 app.get('/api/stats', (req, res) => {
     let cpu = 0, ram = 0;
     if (serverStatus === 'ONLINE') {
-        cpu = Math.random() * 15 + 5; // 5-20%
-        ram = 1024 * 1024 * 1024 * 1.5; // 1.5 GB
+        cpu = Math.random() * 15 + 5;
+        ram = 1024 * 1024 * 1024 * 1.5;
     }
     res.json({
         cpu: cpu,
@@ -93,7 +94,7 @@ app.get('/api/stats', (req, res) => {
     });
 });
 
-// 4. Whitelist (Persistente en archivo json)
+// 4. Whitelist (Persistente en archivo json en la raíz)
 app.get('/api/whitelist', (req, res) => {
     if (fs.existsSync(WHITELIST_FILE)) {
         res.json(JSON.parse(fs.readFileSync(WHITELIST_FILE, 'utf8')));
@@ -107,7 +108,6 @@ app.post('/api/whitelist/add', (req, res) => {
     let list = [];
     if (fs.existsSync(WHITELIST_FILE)) list = JSON.parse(fs.readFileSync(WHITELIST_FILE, 'utf8'));
     
-    // Evitar duplicados
     if (!list.some(u => u.name === user)) {
         list.push({ name: user, date: new Date().toLocaleDateString() });
         fs.writeFileSync(WHITELIST_FILE, JSON.stringify(list, null, 2));
@@ -144,12 +144,7 @@ io.on('connection', (socket) => {
     socket.on('command', (cmd) => {
         io.emit('console_data', `> ${cmd}\r\n`);
         if (serverStatus === 'ONLINE') {
-            if(cmd.startsWith('whitelist')) {
-                // Lógica simple para comandos por consola
-                io.emit('console_data', `[Server] Whitelist command received.\r\n`);
-            } else {
-                io.emit('console_data', `[Server] Unknown command.\r\n`);
-            }
+            io.emit('console_data', `[Server] Comando desconocido.\r\n`);
         }
     });
 });
