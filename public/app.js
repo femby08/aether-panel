@@ -152,6 +152,29 @@ socket.on('status_change', s => {
     } 
 });
 
+// --- FIX: TOAST NOTIFICATIONS (Backend Listener) ---
+socket.on('toast', (data) => {
+    let bg = '#333'; // Default
+    if (data.type === 'success') bg = '#10b981';
+    if (data.type === 'error')   bg = '#ef4444';
+    if (data.type === 'warning') bg = '#f59e0b';
+    if (data.type === 'info')    bg = '#8b5cf6';
+
+    Toastify({
+        text: data.msg,
+        duration: 4000,
+        gravity: "top", 
+        position: "right", 
+        style: { 
+            background: bg,
+            boxShadow: "0 10px 20px rgba(0,0,0,0.2)",
+            borderRadius: "12px",
+            fontWeight: "600"
+        },
+        stopOnFocus: true 
+    }).showToast();
+});
+
 
 // --- 6. WHITELIST SYSTEM ---
 function loadWhitelist() {
