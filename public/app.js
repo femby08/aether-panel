@@ -300,12 +300,46 @@ function uploadFile() {
     i.click();
 }
 
-function loadCfg() { api('config').then(d => {
-    const c = document.getElementById('cfg-list'); c.innerHTML = '';
-    Object.entries(d).forEach(([k,v]) => {
-        c.innerHTML += `<div class="cfg-item"><label class="cfg-label">${k}</label><input class="cfg-in" value="${v}" onchange="saveCfgSingle('${k}', this.value)"></div>`;
+// === FIX: Usar FETCH (GET) en lugar de API (POST) para leer configuración ===
+function loadCfg() { 
+    // Usamos fetch directamente para asegurar que sea una petición GET
+    fetch('/api/config')
+    .then(r => r.json()) 
+    .then(d => {
+        const c = document.getElementById('cfg-list'); 
+        c.innerHTML = '';
+        
+        // Evitamos mostrar "success: true" si se cuela
+        if(d.success === true) delete d.success;
+
+        Object.entries(d).forEach(([k,v]) => {
+            c.innerHTML += `<div class="cfg-item">
+                <label class="cfg-label">${k}</label>
+                <input class="cfg-in" id="cfg-input-${k}" value="${v}">
+            </div>`;
+        });
     });
-});}
+}
+
+// === NUEVA FUNCIÓN: Guardar Configuración ===
+function saveCfg() {
+    const inputs = document.querySelectorAll('.cfg-in');
+    const payload = {};
+    
+    // Recopilar todos los valores
+    inputs.forEach(input => {
+        const key = input.id.replace('cfg-input-', '');
+        payload[key] = input.value;
+    });
+
+    api('config', payload).then(res => {
+        if(res.success) {
+            Toastify({text: "Configuración guardada", style:{background:"#10b981"}}).showToast();
+        } else {
+            Toastify({text: "Error al guardar", style:{background:"#ef4444"}}).showToast();
+        }
+    });
+}
 
 function checkUpdate() { Toastify({text: "Buscando actualizaciones...", style:{background:"var(--p)"}}).showToast(); setTimeout(() => Toastify({text: "Sistema actualizado", style:{background:"#10b981"}}).showToast(), 1500); }
 function forceUIUpdate() { location.reload(); }
@@ -351,12 +385,9 @@ function loadVersions(type) {
 function confirmInstall() {
     if (!selectedVerData) return;
     
-    // --- CORRECCIÓN MATEMÁTICA AQUÍ ---
-    // Convertimos 1.5GB -> 1536M para que Java no se queje de los decimales
     const ramVal = parseFloat(document.getElementById('ram-slider').value);
     const ramMB = Math.floor(ramVal * 1024);
     const ramStr = ramMB + "M"; 
-    // ----------------------------------
     
     document.getElementById('ram-modal').style.display = 'none';
     Toastify({text: `Configurando ${ramStr} RAM e instalando...`, style:{background:"var(--p)"}}).showToast();
