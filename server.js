@@ -7,87 +7,699 @@ const MCManager = require('./mc_manager');
 const osUtils = require('os-utils');
 const os = require('os');
 const multer = require('multer');
-const axios = require('axios');
-const { exec, spawn } = require('child_process');
+const { exec } = require('child_process');
 const stream = require('stream');
 const { promisify } = require('util');
+const cron = require('node-cron');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const axios = require('axios');
+const path = require('path');
+// Ensure server.js does not crash on unhandled promise rejections (common with axios)
+process.on('unhandledRejection', (reason, p) => {
+    console.error('Unhandled Rejection at:', p, 'reason:', reason);
+});
 
-// --- INICIALIZACIÓN ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const upload = multer({ dest: os.tmpdir() });
-const pipeline = promisify(stream.pipeline);
 
 const IS_WIN = process.platform === 'win32';
 const SERVER_DIR = path.join(__dirname, 'servers', 'default');
 const BACKUP_DIR = path.join(__dirname, 'backups');
+const CRON_FILE = path.join(__dirname, 'cron_tasks.json');
+const USERS_FILE = path.join(__dirname, 'users.json');
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 
 // Asegurar directorios
 if (!fs.existsSync(SERVER_DIR)) fs.mkdirSync(SERVER_DIR, { recursive: true });
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
+// Obtener Secreto JWT
+function getJwtSecret() {
+    try {
+        if (fs.existsSync(SETTINGS_FILE)) {
+            const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+            return s.jwt_secret || 'default-secret-change-this';
+        }
+    } catch (e) { console.error('Error reading JWT secret:', e); }
+    return 'default-secret-change-this';
+}
+
 // --- MIDDLEWARE ---
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for file uploads/saves
+
+// Helpers de Auth Simplificada
+function getAllUsers() {
+    if (!fs.existsSync(USERS_FILE)) return [];
+    try {
+        const data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        // Support both old single-user format and new array format
+        if (Array.isArray(data)) return data;
+        // Convert old format to new
+        return [{ ...data, role: 'admin', permissions: [], created: Date.now() }];
+    } catch (e) { return []; }
+}
+
+function getAdminUser() {
+    const users = getAllUsers();
+    return users.find(u => u.role === 'admin') || users[0] || null;
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+function findUserByUsername(username) {
+    return getAllUsers().find(u => u.username === username);
+}
+
+function hashPassword(password, salt) {
+    if (!salt) salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    return { salt, hash };
+}
+
+function verifyPassword(password, storedHash, salt) {
+    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    return hash === storedHash;
+}
+
+// Middleware de Autenticación
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, getJwtSecret(), (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
 
 // --- GESTOR MINECRAFT ---
 const mcServer = new MCManager(io);
 
-// --- CLIENTE API GITHUB [CONFIGURACIÓN] ---
-const apiClient = axios.create({ headers: { 'User-Agent': 'Aether-Panel/1.6.0' }, timeout: 10000 });
-const REPO_OWNER = 'femby08';
-const REPO_NAME = 'aether-panel';
-const BRANCH = 'main';
-const REPO_RAW = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
-const GH_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/package.json?ref=${BRANCH}`;
-const REPO_ZIP = `https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/heads/${BRANCH}.zip`;
+// --- SISTEMA CRON ---
+let scheduledTasks = [];
+function loadCronTasks() {
+    scheduledTasks.forEach(t => t.task.stop());
+    scheduledTasks = [];
+    if (!fs.existsSync(CRON_FILE)) return;
+    try {
+        const tasks = JSON.parse(fs.readFileSync(CRON_FILE, 'utf8'));
+        tasks.forEach(t => {
+            if (t.enabled) {
+                const job = cron.schedule(t.expression, async () => {
+                    io.emit('toast', { type: 'info', msg: `⚙️ Tarea Auto: ${t.name}` });
+                    if (t.action === 'restart') await mcServer.restart();
+                    else if (t.action === 'backup') exec(`tar -czf "${path.join(BACKUP_DIR, 'auto-' + Date.now() + '.tar.gz')}" -C "${path.join(__dirname, 'servers')}" default`);
+                    else if (t.action === 'stop') await mcServer.stop();
+                    else if (t.action === 'start') await mcServer.start();
+                });
+                scheduledTasks.push({ id: t.id, task: job });
+            }
+        });
+    } catch (e) { console.error("Error Cron:", e); }
+}
+loadCronTasks();
 
-// --- UTILIDADES ---
+// --- RUTAS API AUTH (SIMPLIFICADO) ---
 
+// Estado de la instalación (¿Hay usuario creado?)
+app.get('/api/auth/status', (req, res) => {
+    const admin = getAdminUser();
+    res.json({ setupRequired: !admin });
+});
+
+// Configuración Inicial (Setup)
+app.post('/api/auth/setup', (req, res) => {
+    if (getAdminUser()) return res.status(403).json({ error: 'El panel ya está configurado.' });
+
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Faltan datos.' });
+
+    const { salt, hash } = hashPassword(password);
+    const user = { username, salt, hash, created: Date.now() };
+
+    fs.writeFileSync(USERS_FILE, JSON.stringify(user));
+
+    // Auto login
+    const token = jwt.sign({ username: user.username }, getJwtSecret(), { expiresIn: '7d' });
+    res.json({ success: true, token, username: user.username });
+});
+
+// Login
+app.post('/api/auth/login', (req, res) => {
+    const { username, password } = req.body;
+    const user = findUserByUsername(username);
+
+    if (!user) return res.status(401).json({ error: 'Usuario incorrecto.' });
+
+    if (verifyPassword(password, user.hash, user.salt)) {
+        const token = jwt.sign({
+            username: user.username,
+            role: user.role || 'admin'
+        }, getJwtSecret(), { expiresIn: '7d' });
+
+        res.json({
+            success: true,
+            token,
+            username: user.username,
+            role: user.role || 'admin',
+            permissions: user.permissions || []
+        });
+    } else {
+        res.status(401).json({ error: 'Contraseña incorrecta.' });
+    }
+});
+
+app.get('/api/auth/check', authenticateToken, (req, res) => {
+    const user = findUserByUsername(req.user.username);
+    if (!user) return res.status(404).json({ authenticated: false });
+
+    res.json({
+        authenticated: true,
+        user: {
+            username: req.user.username,
+            role: user.role || 'admin',
+            permissions: user.permissions || []
+        }
+    });
+});
+
+// Account Management Endpoints
+app.post('/api/account/username', authenticateToken, (req, res) => {
+    const { username } = req.body;
+
+    if (!username || username.trim().length < 3) {
+        return res.json({ success: false, error: 'El nombre de usuario debe tener al menos 3 caracteres' });
+    }
+
+    try {
+        const users = getAllUsers();
+        const userIndex = users.findIndex(u => u.username === req.user.username);
+        if (userIndex === -1) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        // Check if new username already exists
+        if (users.some(u => u.username === username.trim() && u.username !== req.user.username)) {
+            return res.json({ success: false, error: 'El nombre de usuario ya existe' });
+        }
+
+        users[userIndex].username = username.trim();
+        saveUsers(users);
+
+        // Generate new token with updated username
+        const token = jwt.sign({
+            username: users[userIndex].username,
+            role: users[userIndex].role || 'admin'
+        }, getJwtSecret(), { expiresIn: '7d' });
+
+        res.json({ success: true, token });
+    } catch (error) {
+        console.error('Error updating username:', error);
+        res.json({ success: false, error: 'Error al actualizar el nombre de usuario' });
+    }
+});
+
+app.post('/api/account/password', authenticateToken, (req, res) => {
+    const { password } = req.body;
+
+    if (!password || password.length < 4) {
+        return res.json({ success: false, error: 'La contraseña debe tener al menos 4 caracteres' });
+    }
+
+    try {
+        const users = getAllUsers();
+        const userIndex = users.findIndex(u => u.username === req.user.username);
+        if (userIndex === -1) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        const { salt, hash } = hashPassword(password);
+        users[userIndex].salt = salt;
+        users[userIndex].hash = hash;
+
+        saveUsers(users);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating password:', error);
+        res.json({ success: false, error: 'Error al actualizar la contraseña' });
+    }
+});
+
+// ===== USER MANAGEMENT ENDPOINTS =====
+
+// Get all users (admin only)
+app.get('/api/users/list', authenticateToken, (req, res) => {
+    try {
+        // Check if current user is admin
+        const currentUser = findUserByUsername(req.user.username);
+        if (!currentUser || currentUser.role !== 'admin') {
+            return res.status(403).json({ error: 'Only administrators can view users' });
+        }
+
+        const users = getAllUsers();
+        // Don't send passwords/hashes to frontend
+        const safeUsers = users.map(u => ({
+            username: u.username,
+            role: u.role || 'user',
+            permissions: u.permissions || [],
+            created: u.created || Date.now()
+        }));
+
+        res.json(safeUsers);
+    } catch (error) {
+        console.error('Error listing users:', error);
+        res.status(500).json({ error: 'Error loading users' });
+    }
+});
+
+// Create new user (admin only)
+app.post('/api/users/create', authenticateToken, (req, res) => {
+    try {
+        const { username, password, role, permissions } = req.body;
+
+        // Check if current user is admin
+        const currentUser = findUserByUsername(req.user.username);
+        if (!currentUser || currentUser.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only administrators can create users' });
+        }
+
+        // Validate input
+        if (!username || !password) {
+            return res.json({ success: false, error: 'Username and password are required' });
+        }
+
+        if (username.trim().length < 3) {
+            return res.json({ success: false, error: 'Username must be at least 3 characters' });
+        }
+
+        if (password.length < 4) {
+            return res.json({ success: false, error: 'Password must be at least 4 characters' });
+        }
+
+        // Check if user already exists
+        const users = getAllUsers();
+        if (users.find(u => u.username === username)) {
+            return res.json({ success: false, error: 'User already exists' });
+        }
+
+        // Create new user
+        const { salt, hash } = hashPassword(password);
+        const newUser = {
+            username: username.trim(),
+            salt,
+            hash,
+            role: role || 'user',
+            permissions: permissions || [],
+            created: Date.now()
+        };
+
+        users.push(newUser);
+        saveUsers(users);
+
+        res.json({ success: true, message: `User ${username} created successfully` });
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.json({ success: false, error: 'Error creating user' });
+    }
+});
+
+// Delete user (admin only)
+app.post('/api/users/delete', authenticateToken, (req, res) => {
+    try {
+        const { username } = req.body;
+
+        // Check if current user is admin
+        const currentUser = findUserByUsername(req.user.username);
+        if (!currentUser || currentUser.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only administrators can delete users' });
+        }
+
+        // Can't delete yourself
+        if (currentUser.username === username) {
+            return res.json({ success: false, error: 'You cannot delete your own account' });
+        }
+
+        const users = getAllUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+
+        if (userIndex === -1) {
+            return res.json({ success: false, error: 'User not found' });
+        }
+
+        users.splice(userIndex, 1);
+        saveUsers(users);
+
+        res.json({ success: true, message: `User ${username} deleted successfully` });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.json({ success: false, error: 'Error deleting user' });
+    }
+});
+
+// Update user (admin only)
+app.post('/api/users/update', authenticateToken, (req, res) => {
+    try {
+        const { username, role, permissions } = req.body;
+
+        // Check if current user is admin
+        const currentUser = findUserByUsername(req.user.username);
+        if (!currentUser || currentUser.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only administrators can update users' });
+        }
+
+        // Validate input
+        if (!username) {
+            return res.json({ success: false, error: 'Username is required' });
+        }
+
+        const users = getAllUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+
+        if (userIndex === -1) {
+            return res.json({ success: false, error: 'User not found' });
+        }
+
+        // Update user role and permissions
+        if (role) users[userIndex].role = role;
+        if (permissions !== undefined) users[userIndex].permissions = permissions;
+
+        saveUsers(users);
+
+        res.json({ success: true, message: `User ${username} updated successfully` });
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.json({ success: false, error: 'Error updating user' });
+    }
+});
+
+
+
+// --- RUTAS PROTEGIDAS ---
+
+// Info Básica
+app.get('/api/info', (req, res) => {
+    try { const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')); res.json({ version: pkg.version }); }
+    catch (e) { res.json({ version: 'Unknown' }); }
+});
+
+app.get('/api/network', authenticateToken, (req, res) => {
+    let port = 25565; let customDomain = null;
+    try {
+        const props = fs.readFileSync(path.join(SERVER_DIR, 'server.properties'), 'utf8');
+        const match = props.match(/server-port=(\d+)/);
+        if (match) port = match[1];
+        if (fs.existsSync(SETTINGS_FILE)) {
+            const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+            customDomain = s.custom_domain;
+        }
+    } catch (e) { }
+    res.json({ ip: getIP(), port: port, custom_domain: customDomain });
+});
+
+function getIP() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const net of interfaces[name]) {
+            if (net.family === 'IPv4' && !net.internal) return net.address;
+        }
+    }
+    return '127.0.0.1';
+}
+
+// Stats & Power
+app.get('/api/stats', authenticateToken, (req, res) => {
+    osUtils.cpuUsage((cpuPercent) => {
+        sendStats(cpuPercent, getDirSize(SERVER_DIR), res);
+    });
+});
+app.get('/api/status', authenticateToken, (req, res) => res.json(mcServer.getStatus()));
+app.post('/api/power/:a', authenticateToken, async (req, res) => {
+    if (mcServer[req.params.a]) await mcServer[req.params.a]();
+    res.json({ success: true });
+});
+
+// Config & Files
+app.get('/api/config', authenticateToken, (req, res) => res.json(mcServer.readProperties()));
+app.post('/api/config', authenticateToken, (req, res) => {
+    mcServer.writeProperties(req.body);
+    res.json({ success: true });
+});
+
+app.get('/api/files', authenticateToken, (req, res) => {
+    const t = path.join(SERVER_DIR, (req.query.path || '').replace(/\.\./g, ''));
+    if (!fs.existsSync(t)) return res.json([]);
+    const files = fs.readdirSync(t, { withFileTypes: true }).map(f => ({
+        name: f.name, isDir: f.isDirectory(), size: f.isDirectory() ? '-' : (fs.statSync(path.join(t, f.name)).size / 1024).toFixed(1) + ' KB'
+    }));
+    res.json(files.sort((a, b) => a.isDir === b.isDir ? 0 : a.isDir ? -1 : 1));
+});
+
+app.delete('/api/files', authenticateToken, (req, res) => {
+    const filePath = path.join(SERVER_DIR, (req.query.path || '').replace(/\.\./g, ''));
+    if (!fs.existsSync(filePath)) return res.json({ success: false, error: 'Archivo no encontrado' });
+    try { fs.unlinkSync(filePath); res.json({ success: true }); } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+app.post('/api/files/upload', authenticateToken, upload.single('file'), (req, res) => {
+    if (!req.file) return res.json({ success: false });
+    const target = path.join(SERVER_DIR, (req.query.path || '').replace(/\.\./g, ''), req.file.originalname);
+    fs.renameSync(req.file.path, target);
+    res.json({ success: true });
+});
+
+app.post('/api/files/read', authenticateToken, (req, res) => {
+    const filePath = path.join(SERVER_DIR, (req.body.path || '').replace(/\.\./g, ''));
+    if (!fs.existsSync(filePath)) return res.json({ success: false, error: 'File not found' });
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        res.json({ success: true, content });
+    } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+app.post('/api/files/write', authenticateToken, (req, res) => {
+    const filePath = path.join(SERVER_DIR, (req.body.path || '').replace(/\.\./g, ''));
+    try {
+        fs.writeFileSync(filePath, req.body.content || '');
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// Backups & Cron
+app.get('/api/cron', authenticateToken, (req, res) => {
+    if (fs.existsSync(CRON_FILE)) res.json(JSON.parse(fs.readFileSync(CRON_FILE, 'utf8'))); else res.json([]);
+});
+app.post('/api/cron', authenticateToken, (req, res) => {
+    fs.writeFileSync(CRON_FILE, JSON.stringify(req.body, null, 2));
+    loadCronTasks();
+    res.json({ success: true });
+});
+
+app.delete('/api/cron/:id', authenticateToken, (req, res) => {
+    try {
+        if (!fs.existsSync(CRON_FILE)) return res.json({ success: false });
+        let tasks = JSON.parse(fs.readFileSync(CRON_FILE, 'utf8'));
+        tasks = tasks.filter(t => t.id !== req.params.id);
+        fs.writeFileSync(CRON_FILE, JSON.stringify(tasks, null, 2));
+        loadCronTasks();
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+let cronTasks = [];
+function loadCronTasks() {
+    // Stop existing tasks
+    cronTasks.forEach(t => t.stop());
+    cronTasks = [];
+
+    if (!fs.existsSync(CRON_FILE)) return;
+    try {
+        const tasks = JSON.parse(fs.readFileSync(CRON_FILE, 'utf8'));
+        tasks.forEach(task => {
+            if (task.enabled && task.schedule && task.command) {
+                try {
+                    const job = cron.schedule(task.schedule, () => {
+                        console.log(`Executing cron task: ${task.name}`);
+                        mcServer.sendCommand(task.command);
+                    });
+                    cronTasks.push(job);
+                } catch (err) {
+                    console.error(`Invalid schedule for task ${task.name}: ${task.schedule}`);
+                }
+            }
+        });
+        console.log(`Loaded ${cronTasks.length} cron tasks.`);
+    } catch (e) { console.error('Error loading cron tasks:', e); }
+}
+// Load tasks on startup
+loadCronTasks();
+
+app.get('/api/backups', authenticateToken, (req, res) => {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
+    res.json(fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.tar.gz')).map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1048576).toFixed(2) + ' MB' })));
+});
+app.post('/api/backups/create', authenticateToken, (req, res) => {
+    exec(`tar -czf "${path.join(BACKUP_DIR, 'backup-' + Date.now() + '.tar.gz')}" -C "${path.join(__dirname, 'servers')}" default`, (e) => res.json({ success: !e }));
+});
+app.post('/api/backups/delete', authenticateToken, (req, res) => {
+    fs.unlinkSync(path.join(BACKUP_DIR, req.body.name)); res.json({ success: true });
+});
+app.post('/api/backups/restore', authenticateToken, async (req, res) => {
+    await mcServer.stop();
+    exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e }));
+});
+app.post('/api/backups/explore', authenticateToken, (req, res) => {
+    const filePath = path.join(BACKUP_DIR, req.body.name);
+    if (!fs.existsSync(filePath)) return res.json({ success: false, error: "Archivo no encontrado" });
+    const cmd = IS_WIN ? `tar -tf "${filePath}"` : `tar -ztf "${filePath}"`;
+    exec(cmd, (err, stdout) => {
+        if (err) return res.json({ success: false, content: ["Error al leer archivo."] });
+        const lines = stdout.split('\n').filter(l => l.trim() !== '');
+        // Árbol simple para el cliente
+        const tree = {};
+        lines.forEach(line => {
+            const parts = line.split('/');
+            let current = tree;
+            parts.forEach((part, index) => {
+                if (!part) return;
+                if (index === parts.length - 1) { if (!current.files) current.files = []; current.files.push(part); }
+                else { if (!current.dirs) current.dirs = {}; if (!current.dirs[part]) current.dirs[part] = { dirs: {}, files: [] }; current = current.dirs[part]; }
+            });
+        });
+        res.json({ success: true, tree, flat: lines });
+    });
+});
+
+// --- NEBULA / VERSIONS MANAGEMENT ---
+
+app.post('/api/nebula/versions', authenticateToken, async (req, res) => {
+    const { type } = req.body;
+    try {
+        let versions = [];
+        if (type === 'vanilla') {
+            const response = await axios.get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+            versions = response.data.versions.filter(v => v.type === 'release').map(v => ({ id: v.id, url: v.url }));
+        } else if (type === 'paper') {
+            const response = await axios.get('https://api.papermc.io/v2/projects/paper');
+            versions = response.data.versions.reverse().map(v => ({ id: v }));
+        } else if (type === 'fabric') {
+            const response = await axios.get('https://meta.fabricmc.net/v2/versions/game');
+            versions = response.data.filter(v => v.stable).map(v => ({ id: v.version }));
+        } else if (type === 'forge') {
+            const response = await axios.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json');
+            const promos = response.data.promos;
+            const gameVersions = new Set();
+            Object.keys(promos).forEach(k => {
+                const part = k.split('-')[0];
+                if (part && !isNaN(parseInt(part[0]))) gameVersions.add(part);
+            });
+            // Ordenar versiones (simple string sort por ahora, idealmente semver)
+            versions = Array.from(gameVersions).sort((a, b) => b.localeCompare(a, undefined, { numeric: true })).map(v => ({ id: v }));
+        }
+        res.json(versions);
+    } catch (error) {
+        console.error('Error fetching versions:', error.message);
+        res.status(500).json({ error: 'Failed to fetch versions' });
+    }
+});
+
+app.post('/api/nebula/resolve-vanilla', authenticateToken, async (req, res) => {
+    const { url } = req.body;
+    try {
+        const response = await axios.get(url);
+        const serverUrl = response.data.downloads?.server?.url;
+        if (serverUrl) res.json({ url: serverUrl });
+        else res.status(404).json({ error: 'Server download not found' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to resolve vanilla version' });
+    }
+});
+
+app.post('/api/nebula/resolve-forge', authenticateToken, async (req, res) => {
+    const { version } = req.body;
+    try {
+        const response = await axios.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json');
+        const promos = response.data.promos;
+        const forgeVer = promos[`${version}-recommended`] || promos[`${version}-latest`];
+
+        if (!forgeVer) return res.status(404).json({ error: 'No compatible Forge version found' });
+
+        const longVersion = `${version}-${forgeVer}`;
+        const url = `https://maven.minecraftforge.net/net/minecraftforge/forge/${longVersion}/forge-${longVersion}-installer.jar`;
+        res.json({ url });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to resolve forge version' });
+    }
+});
+
+app.post('/api/install', authenticateToken, async (req, res) => {
+    const { url, filename } = req.body;
+    try {
+        await mcServer.installJar(url, filename);
+        res.json({ success: true });
+    } catch (error) {
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// --- SETTINGS MANAGEMENT ---
+
+app.post('/api/settings', authenticateToken, (req, res) => {
+    try {
+        const newSettings = req.body;
+        let currentSettings = {};
+
+        if (fs.existsSync(SETTINGS_FILE)) {
+            try {
+                currentSettings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+            } catch (e) { }
+        }
+
+        // Merge existing settings with new ones
+        const updatedSettings = { ...currentSettings, ...newSettings };
+
+        // Save JWT secret if provided
+        if (newSettings.jwt_secret) updatedSettings.jwt_secret = newSettings.jwt_secret;
+
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updatedSettings, null, 2));
+
+        // Update MCManager RAM if present
+        if (newSettings.ram) {
+            mcServer.ram = newSettings.ram;
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        res.json({ success: false, error: 'Error saving settings' });
+    }
+});
+
+// Utility
 const getDirSize = (dirPath) => {
     let size = 0;
     try {
         if (fs.existsSync(dirPath)) {
             const files = fs.readdirSync(dirPath);
             files.forEach(file => {
-                const filePath = path.join(dirPath, file);
-                const stats = fs.statSync(filePath);
-                if (stats.isDirectory()) size += getDirSize(filePath);
-                else size += stats.size;
+                const stats = fs.statSync(path.join(dirPath, file));
+                if (stats.isDirectory()) size += getDirSize(path.join(dirPath, file)); else size += stats.size;
             });
         }
-    } catch(e) {}
+    } catch (e) { }
     return size;
 };
 
-function getServerIP() {
-    const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
-        for (const net of interfaces[name]) {
-            if (net.family === 'IPv4' && !net.internal) {
-                return net.address;
-            }
-        }
-    }
-    return '127.0.0.1';
-}
-
 function sendStats(cpuPercent, diskBytes, res) {
     const cpus = os.cpus();
-    let cpuSpeed = cpus.length > 0 ? cpus[0].speed : 0;
-
-    if (cpuSpeed === 0 && !IS_WIN) {
-        try {
-            const cpuInfo = fs.readFileSync('/proc/cpuinfo', 'utf8');
-            const match = cpuInfo.match(/cpu MHz\s+:\s+(\d+(\.\d+)?)/);
-            if (match) cpuSpeed = parseFloat(match[1]);
-        } catch (e) {}
-    }
-
     res.json({
         cpu: cpuPercent * 100,
-        cpu_freq: cpuSpeed,
+        cpu_freq: cpus.length > 0 ? cpus[0].speed : 0,
         ram_total: os.totalmem(),
         ram_free: os.freemem(),
         ram_used: os.totalmem() - os.freemem(),
@@ -96,312 +708,21 @@ function sendStats(cpuPercent, diskBytes, res) {
     });
 }
 
-// ==========================================
-//                 RUTAS API
-// ==========================================
-
-// --- API RED ---
-app.get('/api/network', (req, res) => {
-    let port = 25565; let customDomain = null;
-    try {
-        const props = fs.readFileSync(path.join(SERVER_DIR, 'server.properties'), 'utf8');
-        const match = props.match(/server-port=(\d+)/);
-        if (match) port = match[1];
-        const settingsPath = path.join(__dirname, 'settings.json');
-        if (fs.existsSync(settingsPath)) {
-            const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-            customDomain = settings.custom_domain || null;
-        }
-    } catch (e) {}
-    res.json({ ip: getServerIP(), port: port, custom_domain: customDomain });
-});
-
-// --- INFO ---
-app.get('/api/info', (req, res) => {
-    try { const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')); res.json({ version: pkg.version }); } 
-    catch (e) { res.json({ version: 'Unknown' }); }
-});
-
-// --- ACTUALIZADOR (CORE LOGIC) ---
-app.get('/api/update/check', async (req, res) => {
-    try {
-        const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-        let remotePkg;
-        try {
-            const remoteResponse = (await apiClient.get(GH_API_URL)).data;
-            const content = Buffer.from(remoteResponse.content, 'base64').toString();
-            remotePkg = JSON.parse(content);
-        } catch (apiError) {
-            console.warn("GitHub API limit hit, switching to RAW:", apiError.message);
-            remotePkg = (await apiClient.get(`${REPO_RAW}/package.json?t=${Date.now()}`)).data;
-        }
-        
-        if (remotePkg.version !== localPkg.version) {
-            return res.json({ type: IS_WIN ? 'manual' : 'hard', local: localPkg.version, remote: remotePkg.version });
-        }
-
-        const files = ['public/index.html', 'public/style.css', 'public/app.js'];
-        let hasChanges = false;
-        for (const f of files) {
-            try {
-                const remoteContent = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
-                const localPath = path.join(__dirname, f);
-                if (fs.existsSync(localPath)) {
-                    const localContent = fs.readFileSync(localPath, 'utf8');
-                    if (JSON.stringify(remoteContent) !== JSON.stringify(localContent)) { hasChanges = true; break; }
-                }
-            } catch(e) {}
-        }
-        if (hasChanges) return res.json({ type: 'soft', local: localPkg.version, remote: remotePkg.version });
-        res.json({ type: 'none' });
-    } catch (e) { console.error("Update Check Error:", e.message); res.json({ type: 'error' }); }
-});
-
-app.post('/api/update/perform', async (req, res) => {
-    const { type } = req.body;
-    
-    if (type === 'hard') {
-        if(IS_WIN) {
-            const updater = spawn('cmd.exe', ['/c', 'start', 'updater.bat'], { detached: true, stdio: 'ignore' });
-            updater.unref();
-        } else {
-            io.emit('toast', { type: 'warning', msg: '🔄 Actualizando sistema (Reinicio requerido)...' });
-            const updater = spawn('systemd-run', ['--unit=aether-update-'+Date.now(), '/bin/bash', '/opt/aetherpanel/updater.sh'], { detached: true, stdio: 'ignore' });
-            updater.unref();
-        }
-        res.json({ success: true, mode: 'hard' });
-
-    } else if (type === 'soft') {
-        io.emit('toast', { type: 'info', msg: '🎨 Descargando interfaz...' });
-        
-        try {
-            if (!IS_WIN) {
-                const script = `
-                    rm -rf /tmp/aup_temp
-                    mkdir -p /tmp/aup_temp
-                    
-                    echo "Descargando..."
-                    curl -L -f -s "${REPO_ZIP}" -o /tmp/aup_temp/update.zip || wget -q "${REPO_ZIP}" -O /tmp/aup_temp/update.zip
-                    
-                    if [ ! -f /tmp/aup_temp/update.zip ]; then echo "Error: Fallo descarga ZIP"; exit 1; fi
-                    
-                    echo "Descomprimiendo..."
-                    unzip -q -o /tmp/aup_temp/update.zip -d /tmp/aup_temp/extract
-                    
-                    DIR=$(ls /tmp/aup_temp/extract | head -n 1)
-                    SOURCE="/tmp/aup_temp/extract/$DIR/public"
-                    
-                    if [ ! -d "$SOURCE" ]; then echo "Error: Carpeta public no encontrada en $DIR"; exit 1; fi
-                    
-                    echo "Aplicando cambios..."
-                    cp -rf "$SOURCE/"* "${path.join(__dirname, 'public')}/"
-                    rm -rf /tmp/aup_temp
-                    echo "Success"
-                `;
-                
-                exec(script, (error, stdout, stderr) => {
-                    if (error || stderr.includes('Error:')) {
-                        console.error("Soft Update Failed:", stderr || stdout);
-                        io.emit('toast', { type: 'error', msg: '❌ Error al actualizar. Revisa logs.' });
-                    } else {
-                        console.log("Soft Update Success:", stdout);
-                        io.emit('toast', { type: 'success', msg: '✅ Interfaz actualizada. Recargando...' });
-                    }
-                    res.json({ success: !error, mode: 'soft' });
-                });
-
-            } else {
-                const files = ['public/index.html', 'public/style.css', 'public/app.js'];
-                for (const f of files) {
-                    const c = (await apiClient.get(`${REPO_RAW}/${f}?t=${Date.now()}`)).data;
-                    fs.writeFileSync(path.join(__dirname, f), typeof c === 'string' ? c : JSON.stringify(c));
-                }
-                async function dl(u, p) { try { const r = await axios({url:u, method:'GET', responseType:'stream'}); await pipeline(r.data, fs.createWriteStream(p)); } catch(e){} }
-                await dl(`${REPO_RAW}/public/logo.svg`, path.join(__dirname, 'public/logo.svg'));
-                await dl(`${REPO_RAW}/public/logo.ico`, path.join(__dirname, 'public/logo.ico'));
-                res.json({ success: true, mode: 'soft' });
-            }
-
-        } catch (e) { 
-            console.error("Soft update exception:", e);
-            res.status(500).json({ error: e.message }); 
-        }
-    }
-});
-
-// --- AJUSTES ---
-app.post('/api/settings', (req, res) => {
-    try {
-        const { ram, custom_domain } = req.body;
-        let settings = {};
-        const settingsPath = path.join(__dirname, 'settings.json');
-        if (fs.existsSync(settingsPath)) settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        if (ram) settings.ram = ram;
-        if (custom_domain !== undefined) settings.custom_domain = custom_domain;
-        fs.writeFileSync(settingsPath, JSON.stringify(settings));
-        mcServer.loadSettings();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.get('/api/settings', (req, res) => {
-    try { if(fs.existsSync(path.join(__dirname, 'settings.json'))) res.json(JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'))); else res.json({ ram: '4G' }); } catch(e) { res.json({ ram: '4G' }); }
-});
-
-// --- VERSIONES MINECRAFT ---
-app.post('/api/nebula/versions', async (req, res) => {
-    try {
-        const t = req.body.type; let l = [];
-        if (t === 'vanilla') l = (await apiClient.get('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')).data.versions.filter(v => v.type === 'release').map(v => ({ id: v.id, url: v.url, type: 'vanilla' }));
-        else if (t === 'paper') l = (await apiClient.get('https://api.papermc.io/v2/projects/paper')).data.versions.reverse().map(v => ({ id: v, type: 'paper' }));
-        else if (t === 'fabric') l = (await apiClient.get('https://meta.fabricmc.net/v2/versions/game')).data.filter(v => v.stable).map(v => ({ id: v.version, type: 'fabric' }));
-        else if (t === 'forge') {
-            const p = (await apiClient.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json')).data.promos;
-            const s = new Set(); Object.keys(p).forEach(k => { const v = k.split('-')[0]; if (v.match(/^\d+\.\d+(\.\d+)?$/)) s.add(v); });
-            l = Array.from(s).sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' })).map(v => ({ id: v, type: 'forge' }));
-        }
-        res.json(l);
-    } catch (e) { res.status(500).json({ error: 'API Error' }); }
-});
-app.post('/api/nebula/resolve-vanilla', async (req, res) => { try { const d = (await apiClient.get(req.body.url)).data; res.json({ url: d.downloads.server.url }); } catch (e) { res.status(500).json({}); } });
-app.post('/api/nebula/resolve-forge', async (req, res) => {
-    try {
-        const version = req.body.version;
-        const promos = (await apiClient.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json')).data.promos;
-        let forgeBuild = promos[`${version}-recommended`] || promos[`${version}-latest`];
-        if (!forgeBuild) throw new Error("Versión no encontrada");
-        res.json({ url: `https://maven.minecraftforge.net/net/minecraftforge/forge/${version}-${forgeBuild}/forge-${version}-${forgeBuild}-installer.jar` });
-    } catch (e) { res.status(500).json({ error: 'Forge Resolve Failed' }); }
-});
-
-// --- INSTALACIÓN ---
-app.post('/api/install', async (req, res) => { try { await mcServer.installJar(req.body.url, req.body.filename); res.json({ success: true }); } catch (e) { res.status(500).json({}); } });
-app.post('/api/mods/install', async (req, res) => {
-    const { url, name } = req.body; const d = path.join(SERVER_DIR, 'mods');
-    if (!fs.existsSync(d)) fs.mkdirSync(d);
-    io.emit('toast', { type: 'info', msg: `Instalando ${name}...` });
-    try {
-        const response = await axios({ url, method: 'GET', responseType: 'stream' });
-        await pipeline(response.data, fs.createWriteStream(path.join(d, name.replace(/\s+/g, '_') + '.jar')));
-        io.emit('toast', { type: 'success', msg: 'Mod Instalado' });
-        res.json({ success: true });
-    } catch(e) { res.json({ success: false }); }
-});
-
-// --- MONITOR ---
-app.get('/api/stats', (req, res) => {
-    osUtils.cpuUsage((cpuPercent) => {
-        let diskBytes = 0;
-        if(!IS_WIN) {
-            exec(`du -sb ${SERVER_DIR}`, (error, stdout) => {
-                if (!error && stdout) diskBytes = parseInt(stdout.split(/\s+/)[0]);
-                sendStats(cpuPercent, diskBytes, res);
-            });
-        } else {
-            sendStats(cpuPercent, getDirSize(SERVER_DIR), res);
-        }
+// Socket IO con Auth simple
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) return next(new Error('Token no proporcionado'));
+    jwt.verify(token, getJwtSecret(), (err, decoded) => {
+        if (err) return next(new Error('Token inválido'));
+        socket.user = decoded;
+        next();
     });
 });
 
-app.get('/api/status', (req, res) => res.json(mcServer.getStatus()));
-app.post('/api/power/:a', async (req, res) => { try { if (mcServer[req.params.a]) await mcServer[req.params.a](); res.json({ success: true }); } catch (e) { res.status(500).json({}); } });
-
-// ==========================================
-//          WHITELIST API (NUEVO)
-// ==========================================
-
-const getWhitelistPath = () => path.join(SERVER_DIR, 'whitelist.json');
-
-app.get('/api/whitelist', (req, res) => {
-    try {
-        const p = getWhitelistPath();
-        if(!fs.existsSync(p)) return res.json([]);
-        res.json(JSON.parse(fs.readFileSync(p, 'utf8')));
-    } catch(e) { res.json([]); }
+io.on('connection', (s) => {
+    s.emit('logs_history', mcServer.getRecentLogs());
+    s.emit('status_change', mcServer.status);
+    s.on('command', (c) => mcServer.sendCommand(c));
 });
 
-app.post('/api/whitelist/add', async (req, res) => {
-    const name = req.body.user;
-    if(mcServer.status === 'ONLINE') {
-        mcServer.sendCommand(`whitelist add ${name}`);
-        res.json({ success: true });
-    } else {
-        try {
-            // Modo Offline: Intentamos buscar UUID en Mojang para añadirlo manualmente
-            // Nota: Esto requiere internet en el servidor.
-            const mojang = await axios.get(`https://api.mojang.com/users/profiles/minecraft/${name}`);
-            const uuidRaw = mojang.data.id;
-            // Formatear UUID con guiones (8-4-4-4-12)
-            const uuid = uuidRaw.replace(/(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})/, "$1-$2-$3-$4-$5");
-            
-            const p = getWhitelistPath();
-            let current = [];
-            if(fs.existsSync(p)) current = JSON.parse(fs.readFileSync(p, 'utf8'));
-            
-            if(!current.find(u => u.name.toLowerCase() === name.toLowerCase())) {
-                current.push({ uuid, name: mojang.data.name });
-                fs.writeFileSync(p, JSON.stringify(current, null, 2));
-            }
-            res.json({ success: true });
-        } catch(e) {
-            console.error("Error whitelist offline:", e.message);
-            // Fallback: Si falla API Mojang, no podemos añadir offline porque falta UUID
-            res.json({ success: false }); 
-        }
-    }
-});
-
-app.post('/api/whitelist/remove', (req, res) => {
-    const name = req.body.user;
-    if(mcServer.status === 'ONLINE') {
-        mcServer.sendCommand(`whitelist remove ${name}`);
-        res.json({ success: true });
-    } else {
-        try {
-            const p = getWhitelistPath();
-            if(fs.existsSync(p)) {
-                let current = JSON.parse(fs.readFileSync(p, 'utf8'));
-                current = current.filter(u => u.name.toLowerCase() !== name.toLowerCase());
-                fs.writeFileSync(p, JSON.stringify(current, null, 2));
-            }
-            res.json({ success: true });
-        } catch(e) { res.json({ success: false }); }
-    }
-});
-
-app.post('/api/whitelist/toggle', (req, res) => {
-    try {
-        const props = mcServer.readProperties();
-        props['white-list'] = req.body.enabled;
-        mcServer.writeProperties(props);
-        
-        if(mcServer.status === 'ONLINE') {
-            mcServer.sendCommand(`whitelist ${req.body.enabled ? 'on' : 'off'}`);
-        }
-        res.json({ success: true });
-    } catch(e) { res.json({ success: false }); }
-});
-
-// ==========================================
-
-// --- FILES & BACKUPS ---
-app.get('/api/files', (req, res) => {
-    const t = path.join(SERVER_DIR, (req.query.path || '').replace(/\.\./g, ''));
-    if (!fs.existsSync(t)) return res.json([]);
-    const files = fs.readdirSync(t, { withFileTypes: true }).map(f => ({
-        name: f.name, isDir: f.isDirectory(), size: f.isDirectory() ? '-' : (fs.statSync(path.join(t, f.name)).size / 1024).toFixed(1) + ' KB'
-    }));
-    res.json(files.sort((a, b) => a.isDir === b.isDir ? 0 : a.isDir ? -1 : 1));
-});
-app.post('/api/files/read', (req, res) => { const p = path.join(SERVER_DIR, req.body.file.replace(/\.\./g, '')); if (fs.existsSync(p)) res.json({ content: fs.readFileSync(p, 'utf8') }); else res.status(404).json({}); });
-app.post('/api/files/save', (req, res) => { fs.writeFileSync(path.join(SERVER_DIR, req.body.file.replace(/\.\./g, '')), req.body.content); res.json({ success: true }); });
-app.post('/api/files/upload', upload.single('file'), (req, res) => { if (req.file) { fs.renameSync(req.file.path, path.join(SERVER_DIR, req.file.originalname)); res.json({ success: true }); } else res.json({ success: false }); });
-app.get('/api/config', (req, res) => res.json(mcServer.readProperties()));
-app.post('/api/config', (req, res) => { mcServer.writeProperties(req.body); res.json({ success: true }); });
-app.get('/api/backups', (req, res) => { if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); res.json(fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.tar.gz')).map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1048576).toFixed(2) + ' MB' }))); });
-app.post('/api/backups/create', (req, res) => { exec(`tar -czf "${path.join(BACKUP_DIR, 'backup-' + Date.now() + '.tar.gz')}" -C "${path.join(__dirname, 'servers')}" default`, (e) => res.json({ success: !e })); });
-app.post('/api/backups/delete', (req, res) => { fs.unlinkSync(path.join(BACKUP_DIR, req.body.name)); res.json({ success: true }); });
-app.post('/api/backups/restore', async (req, res) => { await mcServer.stop(); exec(`rm -rf "${SERVER_DIR}"/* && tar -xzf "${path.join(BACKUP_DIR, req.body.name)}" -C "${path.join(__dirname, 'servers')}"`, (e) => res.json({ success: !e })); });
-
-io.on('connection', (s) => { s.emit('logs_history', mcServer.getRecentLogs()); s.emit('status_change', mcServer.status); s.on('command', (c) => mcServer.sendCommand(c)); });
-
-server.listen(3000, () => console.log('Aether Panel V1.6.0 Stable running on port 3000'));
+server.listen(3000, () => console.log('Aether Panel Lite running on port 3000'));
