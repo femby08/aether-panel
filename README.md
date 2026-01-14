@@ -8,7 +8,7 @@
 **The lightweight, modern, and powerful control panel for Minecraft servers.**  
 Smart management, real-time monitoring, and beautiful Glassmorphism design.
 
-[![Version](https://img.shields.io/badge/version-1.6.2-8b5cf6?style=for-the-badge&logo=git)](https://github.com/reychampi/aether-panel)
+[![Version](https://img.shields.io/badge/version-1.7.0-8b5cf6?style=for-the-badge&logo=git)](https://github.com/reychampi/aether-panel)
 [![Status](https://img.shields.io/badge/status-stable-10b981?style=for-the-badge)](https://github.com/reychampi/aether-panel)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 ![Windows](https://img.shields.io/badge/Windows-Native%20(Untested)-FFD600?style=for-the-badge&logo=windows)
@@ -52,10 +52,11 @@ Aether Panel is **universal** and works on most modern systems.
 - **Multi-Language Support**: Fully translated into **English**, **Spanish**, and **Portuguese**.
 - **Auto-Detection**: Defaults to English, easily switchable in settings.
 
-### 🧪 Aether Labs (BETA)
-- **Web Scheduler**: Schedule tasks like restarts or backups (UI Prototype).
+### 🧪 Aether Labs (Active)
+- **Web Scheduler**: Schedule tasks like restarts or backups (Cron).
 - **Log Viewer**: View server history directly in the panel.
-- **Improved Labs Interface**: Clearly marked Beta vs WIP features.
+- **Backups**: Create and restore server backups.
+- **File Manager**: Improved navigation and "Back to Labs" integration.
 
 ### 🎨 UI & Performance
 - **Compact & Responsive**: Optimized Power Control layout.
