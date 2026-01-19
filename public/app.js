@@ -456,6 +456,7 @@ function setTab(t, btn) {
     if (t === 'performance-lab') initPerfCharts();
     if (t === 'rcon') loadRcon();
     if (t === 'worlds') loadWorlds();
+    if (t === 'discord-integration') loadDiscordSettings();
 }
 
 let term = null;
@@ -2299,3 +2300,42 @@ window.openAppearanceModal = function () {
     }
     if (existingOpenAppearance) existingOpenAppearance();
 };
+// --- DISCORD INTEGRATION ---
+function loadDiscordSettings() {
+    fetch('/api/integrations/discord', { headers: getAuthHeaders() })
+        .then(r => r.json())
+        .then(data => {
+            const urlInput = document.getElementById('discord-webhook-url');
+            if (urlInput) urlInput.value = data.url || '';
+
+            if (data.events) {
+                if (document.getElementById('discord-evt-start')) document.getElementById('discord-evt-start').checked = data.events.start || false;
+                if (document.getElementById('discord-evt-stop')) document.getElementById('discord-evt-stop').checked = data.events.stop || false;
+                if (document.getElementById('discord-evt-join')) document.getElementById('discord-evt-join').checked = data.events.join || false;
+            }
+        })
+        .catch(err => console.error('Error loading discord settings:', err));
+}
+
+function saveDiscordSettings() {
+    const url = document.getElementById('discord-webhook-url').value;
+    const events = {
+        start: document.getElementById('discord-evt-start').checked,
+        stop: document.getElementById('discord-evt-stop').checked,
+        join: document.getElementById('discord-evt-join').checked
+    };
+
+    api('integrations/discord', { url, events })
+        .then(() => {
+            Toastify({
+                text: t('msg.saved'),
+                style: { background: "#10b981" }
+            }).showToast();
+        })
+        .catch(err => {
+            Toastify({
+                text: t('msg.error'),
+                style: { background: "#ef4444" }
+            }).showToast();
+        });
+}

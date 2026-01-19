@@ -99,6 +99,8 @@ const translations = {
         'labs.logs.desc': 'Análisis de registros.',
         'labs.rcon': 'Consola RCON',
         'labs.rcon.desc': 'Acceso remoto.',
+        'rcon.placeholder': 'Enviar comando RCON...',
+        'rcon.send': 'Enviar',
         'labs.worlds': 'Gestor de Mundos',
         'labs.worlds.desc': 'Administra mundos.',
         'labs.tag.alpha': 'ALPHA',
@@ -185,6 +187,7 @@ const translations = {
         // Backups
         'backups.title': 'Copias de Seguridad',
         'backups.create': 'Crear Backup',
+        'backups.name_optional': 'Nombre (Opcional)',
 
         // Status
         'status.online': 'ONLINE',
@@ -217,6 +220,11 @@ const translations = {
         'plugins.installed': 'Instalados',
         'plugins.store': 'Tienda',
         'plugins.search.placeholder': 'Buscar en Modrinth...',
+        'plugins.search_bar': 'Buscar plugins...',
+        'plugins.cat.all': 'Todos',
+        'plugins.cat.admin': 'Admin',
+        'plugins.cat.mech': 'Mecánicas',
+        'plugins.cat.world': 'Mundo',
 
         // World Manager
         'worlds.title': 'Gestor de Mundos',
@@ -224,6 +232,7 @@ const translations = {
         'worlds.list': 'Mundos Disponibles',
         'worlds.activate': 'Activar',
         'worlds.create': 'Generar Nuevo',
+        'worlds.import': 'Importar',
         'worlds.delete': 'Eliminar',
         'worlds.active': 'ACTIVO',
 
@@ -233,6 +242,11 @@ const translations = {
         'perf.node': 'Versión de Node',
         'perf.os': 'Sistema Operativo',
         'perf.cores': 'Núcleos CPU',
+        'perf.advanced_monitor': 'Monitor Avanzado',
+        'perf.active_processes': 'Procesos Activos',
+        'perf.pid': 'PID',
+        'perf.user': 'Usuario',
+        'perf.command': 'Comando',
 
         // Scheduler
         'scheduler.task.frequency': 'Frecuencia',
@@ -252,6 +266,9 @@ const translations = {
         'scheduler.act.backup': 'Crear Backup',
         'scheduler.act.prune': 'Borrar Backups Antiguos (>7 días)',
         'scheduler.act.say': 'Difundir Mensaje',
+        'scheduler.new_task': 'Nueva Tarea',
+        'scheduler.task_name': 'Nombre de la Tarea',
+        'scheduler.cron_expression': 'Expresión Cron',
     },
 
     en: {
@@ -354,6 +371,8 @@ const translations = {
         'labs.logs.desc': 'Log analysis.',
         'labs.rcon': 'RCON Console',
         'labs.rcon.desc': 'Remote access.',
+        'rcon.placeholder': 'Send RCON command...',
+        'rcon.send': 'Send',
         'labs.worlds': 'World Manager',
         'labs.worlds.desc': 'Manage worlds.',
         'labs.tag.alpha': 'ALPHA',
@@ -440,6 +459,7 @@ const translations = {
         // Backups
         'backups.title': 'Backups',
         'backups.create': 'Create Backup',
+        'backups.name_optional': 'Name (Optional)',
 
         // Status
         'status.online': 'ONLINE',
@@ -472,6 +492,11 @@ const translations = {
         'plugins.installed': 'Installed',
         'plugins.store': 'Store',
         'plugins.search.placeholder': 'Search Modrinth...',
+        'plugins.search_bar': 'Search plugins...',
+        'plugins.cat.all': 'All',
+        'plugins.cat.admin': 'Admin',
+        'plugins.cat.mech': 'Mechanics',
+        'plugins.cat.world': 'World',
 
         // World Manager
         'worlds.title': 'World Manager',
@@ -479,6 +504,7 @@ const translations = {
         'worlds.list': 'Available Worlds',
         'worlds.activate': 'Activate',
         'worlds.create': 'Generate New',
+        'worlds.import': 'Import',
         'worlds.delete': 'Delete',
         'worlds.active': 'ACTIVE',
 
@@ -488,6 +514,11 @@ const translations = {
         'perf.node': 'Node Version',
         'perf.os': 'Operating System',
         'perf.cores': 'CPU Cores',
+        'perf.advanced_monitor': 'Advanced Monitor',
+        'perf.active_processes': 'Active Processes',
+        'perf.pid': 'PID',
+        'perf.user': 'User',
+        'perf.command': 'Command',
     },
 
     pt: {
