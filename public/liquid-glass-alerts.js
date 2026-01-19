@@ -91,14 +91,28 @@ function showUpdateAlert(type, version, onUpdate) {
     const isUI = type === 'ui';
     showLiquidAlert({
         icon: isUI ? 'fa-solid fa-paintbrush' : 'fa-solid fa-server',
-        title: isUI ? 'UI Update Available' : 'System Update Available',
-        description: `Version ${version} is ready to install.${isUI ? '' : ' The server will restart.'}`,
-        primaryText: 'Update Now',
+        title: 'Update Available', // Simplified title
+        description: `There's a new version available (${version})`, // Specific text per user
+        primaryText: 'Update',
         secondaryText: 'Later',
+        danger: false, // We'll handle colors via explicit classes/CSS
         onPrimary: onUpdate,
         onSecondary: () => { }
     });
+
+    // Hack to add specific classes after creation (since the helper doesn't support custom classes yet)
+    // Ideally we'd update showLiquidAlert to accept buttonClasses, but this is quicker for now without breaking other alerts
+    setTimeout(() => {
+        const overlay = document.querySelector('.lg-alert-overlay:last-child');
+        if (overlay) {
+            const primary = overlay.querySelector('.lg-alert-btn.primary');
+            const secondary = overlay.querySelector('.lg-alert-btn.secondary');
+            if (primary) primary.classList.add('lg-btn-green');
+            if (secondary) secondary.classList.add('lg-btn-red');
+        }
+    }, 10);
 }
+
 
 /**
  * Helper for confirmation dialogs

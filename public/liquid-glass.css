@@ -292,50 +292,70 @@
 }
 
 /* ==================== SLIDERS ==================== */
+/* ==================== SLIDERS (Pill Design) ==================== */
+input[type="range"],
 .lg-slider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
+    height: 16px;
+    /* Pill track */
+    background: #ffffff;
     border-radius: var(--radius-full);
-    box-shadow: var(--shadow-inset);
     outline: none;
     cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    border: none;
 }
 
+/* Chrome/Safari Thumb */
+input[type="range"]::-webkit-slider-thumb,
 .lg-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 24px;
-    height: 20px;
-    border-radius: 10px;
-    background: linear-gradient(180deg, #fff 0%, #e8e8ed 100%);
+    width: 50px;
+    /* Pill width */
+    height: 28px;
+    /* Pill height (taller than track) */
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--p, #4facfe), var(--p-dark, #00f2fe));
     border: none;
+    /* No white border */
     cursor: pointer;
-    transition: all var(--duration-normal) var(--spring-bounce);
-    box-shadow:
-        0 2px 6px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    margin-top: -6px;
+    /* Center thumb: (28 - 16) / 2 = 6. Negative margin pulls it up. */
 }
 
+input[type="range"]::-webkit-slider-thumb:hover,
 .lg-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.08);
+    transform: scale(1.1);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
 }
 
+input[type="range"]:active::-webkit-slider-thumb,
 .lg-slider:active::-webkit-slider-thumb {
-    transform: scale(1.02);
-    opacity: 0.8;
+    transform: scale(0.95);
 }
 
+/* Firefox Thumb */
+input[type="range"]::-moz-range-thumb,
 .lg-slider::-moz-range-thumb {
-    width: 24px;
-    height: 20px;
-    border-radius: 10px;
-    background: linear-gradient(180deg, #fff 0%, #e8e8ed 100%);
+    width: 50px;
+    height: 28px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--p, #4facfe), var(--p-dark, #00f2fe));
     border: none;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Ticks Simulation (simulated with background-image if needed, 
+   but simplistic approach first to match clean look) */
+.lg-slider:hover {
+    filter: brightness(1.02);
 }
 
 /* ==================== TOGGLES ==================== */
@@ -1708,103 +1728,323 @@ select option:checked {
     animation: lg-fade-in 0.2s ease-out;
 }
 
+/* Base Alert Style */
 .lg-alert {
-    background: rgba(45, 25, 30, 0.85);
-    backdrop-filter: blur(60px) saturate(180%);
-    -webkit-backdrop-filter: blur(60px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px;
-    box-shadow:
-        0 24px 80px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    padding: 20px 24px;
-    min-width: 280px;
-    max-width: 340px;
+    padding: 30px;
+    /* Reduced top padding handled by icon margin */
+    width: 420px;
     text-align: center;
     animation: lg-alert-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.5);
 }
 
+/* === GLASS DESIGN (Rounded & Blurred) === */
+[data-design="glass"] .lg-alert {
+    background: rgba(30, 30, 35, 0.95);
+    /* Darker background */
+    backdrop-filter: blur(50px) saturate(180%);
+    -webkit-backdrop-filter: blur(50px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 40px;
+    /* Highly rounded pill-like */
+    box-shadow:
+        0 40px 80px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Glass Buttons */
+[data-design="glass"] .lg-alert-btn {
+    border-radius: 20px;
+}
+
+[data-design="glass"] .lg-alert-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s ease;
+}
+
+[data-design="glass"] .lg-alert-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+[data-design="glass"] .lg-alert-btn.primary {
+    background: linear-gradient(135deg, var(--p), var(--p-dark));
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    color: white;
+    border: none;
+    border-radius: 999px;
+    /* Pill */
+}
+
+[data-design="glass"] .lg-alert-btn.primary:hover {
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+    transform: translateY(-1px);
+}
+
+/* Custom Red/Green Buttons */
+.lg-btn-red {
+    background: var(--danger, #ff453a) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(255, 69, 58, 0.3);
+    border-radius: 999px !important;
+}
+
+.lg-btn-red:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+}
+
+.lg-btn-green {
+    background: var(--success, #30d158) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(48, 209, 88, 0.3);
+    border-radius: 999px !important;
+}
+
+.lg-btn-green:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+}
+
+/* Icon & Typography (Shared) */
 .lg-alert-icon {
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 12px;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 5px;
+    /* Reduced bottom margin */
+    margin-top: -10px;
+    /* Pull icon up */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    color: var(--text-primary, rgba(255, 255, 255, 0.9));
+    font-size: 32px;
+    color: var(--p);
+    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.3));
+}
+
+[data-design="glass"] .login-box {
+    border-radius: 40px !important;
+    background: linear-gradient(180deg, rgba(50, 50, 60, 0.4) 0%, rgba(30, 30, 35, 0.6) 100%) !important;
+    backdrop-filter: blur(60px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(60px) saturate(180%) !important;
+    box-shadow:
+        0 40px 100px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    padding: 50px 40px !important;
+}
+
+[data-design="glass"] .login-title {
+    font-weight: 700 !important;
+    letter-spacing: -0.5px !important;
+    font-size: 1.4rem !important;
+    background: linear-gradient(to bottom, #fff, #bbb);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+[data-design="glass"] .login-subtitle {
+    opacity: 0.6;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 30px;
+}
+
+[data-design="glass"] .login-box .cfg-in {
+    border-radius: 50px !important;
+    /* Pill Shape */
+    background: rgba(0, 0, 0, 0.25) !important;
+    border: none !important;
+    /* No borders */
+    padding: 16px 24px !important;
+    color: white !important;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+    text-align: left;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+[data-design="glass"] .login-box .cfg-in:focus {
+    background: rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-design="glass"] .password-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px !important;
+    align-items: stretch;
+}
+
+/* Specific fix for password input in row */
+[data-design="glass"] .password-row .cfg-in {
+    margin-bottom: 0 !important;
+    width: 100%;
+    /* Take full width of its flex container */
+    flex: 1;
+    /* Grow to fill space */
+}
+
+/* Password Toggle Btn - Small Pill */
+[data-design="glass"] .show-pass-btn {
+    border-radius: 50px !important;
+    padding: 0 30px !important;
+    /* Increased horizontal padding */
+    width: auto !important;
+    /* Don't stretch */
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    border: none !important;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+[data-design="glass"] .show-pass-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+[data-design="glass"] .login-box .btn-primary {
+    border-radius: 50px !important;
+    /* Pill Shape */
+    padding: 16px 50px !important;
+    width: auto !important;
+    margin: 25px auto 0 auto !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    background: linear-gradient(135deg, var(--p), var(--p-dark)) !important;
+    border: none !important;
+}
+
+[data-design="glass"] .login-box .btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 15px 40px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    filter: brightness(1.1);
+}
+
+[data-design="glass"] .brand-logo-login {
+    border-radius: 24px !important;
+    background: linear-gradient(135deg, var(--p), var(--p-dark)) !important;
+    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4) !important;
+    width: 68px;
+    height: 68px;
+    margin-bottom: 20px;
+}
+
+[data-design="glass"] .brand-logo-login img {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+
+/* === MATERIAL DESIGN (Flat & Solid) === */
+[data-design="material"] .lg-alert {
+    background: #1e1e23;
+    /* Solid background */
+    border: 1px solid #2a2a30;
+    border-radius: 20px;
+    /* Standard rounded */
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Material Buttons */
+[data-design="material"] .lg-alert-btn {
+    border-radius: 12px;
+}
+
+[data-design="material"] .lg-alert-btn.secondary {
+    background: #2a2a30;
+}
+
+[data-design="material"] .lg-alert-btn.primary {
+    background: var(--p, #8b5cf6);
+    color: white;
+}
+
+/* Icon & Typography (Shared) */
+.lg-alert-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: var(--p);
+    /* Use accent color for icon */
+    filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.3));
 }
 
 .lg-alert-title {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-    font-size: 17px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-    margin-bottom: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    line-height: 1.3;
 }
 
 .lg-alert-description {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+    color: var(--text-secondary);
     line-height: 1.4;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    max-width: 95%;
 }
 
 .lg-alert-actions {
     display: flex;
-    gap: 12px;
-    justify-content: center;
+    gap: 16px;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .lg-alert-btn {
     flex: 1;
-    padding: 10px 20px;
-    border-radius: 20px;
+    padding: 14px 0;
+    /* Taller buttons */
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.2s ease;
     border: none;
     outline: none;
-}
-
-.lg-alert-btn.secondary {
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.lg-alert-btn.secondary:hover {
-    background: rgba(255, 255, 255, 0.18);
-}
-
-.lg-alert-btn.primary {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    text-align: center;
 }
 
 .lg-alert-btn.primary:hover {
-    background: rgba(255, 255, 255, 0.28);
+    filter: brightness(1.1);
     transform: scale(1.02);
 }
 
-.lg-alert-btn.primary:active,
-.lg-alert-btn.secondary:active {
-    transform: scale(0.98);
-    opacity: 0.9;
+.lg-alert-btn:active {
+    transform: scale(0.96);
 }
 
 /* Destructive action */
 .lg-alert-btn.danger {
-    background: rgba(255, 69, 58, 0.25);
-    color: #ff6b6b;
-    border: 1px solid rgba(255, 69, 58, 0.3);
+    background: rgba(255, 69, 58, 0.2);
+    color: #ff453a;
 }
 
-.lg-alert-btn.danger:hover {
-    background: rgba(255, 69, 58, 0.35);
+[data-design="material"] .lg-alert-btn.danger {
+    background: #3a1515;
+    color: #ff6b6b;
+    border: 1px solid #5c1e1e;
 }
 
 @keyframes lg-fade-in {

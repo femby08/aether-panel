@@ -138,6 +138,18 @@ async function handleLogin(event) {
         errorDiv.style.display = 'block';
     }
 }
+// Toggle Password Visibility
+function togglePassword() {
+    const p = document.getElementById('login-password');
+    const b = document.getElementById('toggle-pass-btn');
+    if (p.type === 'password') {
+        p.type = 'text';
+        b.innerText = 'Hide';
+    } else {
+        p.type = 'password';
+        b.innerText = 'Show';
+    }
+}
 
 function logout() {
     localStorage.removeItem('authToken');
@@ -214,12 +226,21 @@ async function checkAuth() {
 }
 
 function showLoginScreen() {
+    // Hide all overlays/modals that might be open
+    document.querySelectorAll('.modal-overlay').forEach(el => el.style.display = 'none');
+
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('main-app').style.display = 'none';
 
-    document.getElementById('login-title').innerText = "AETHER PANEL";
+    document.getElementById('login-title').innerHTML = 'AETHER PANEL <span id="login-version" style="opacity: 0.5; font-size: 0.6em;"></span>';
+    // Re-fetch version to ensure it appears if this is called after load
+    fetch('/api/version').then(r => r.json()).then(d => {
+        const el = document.getElementById('login-version');
+        if (el) el.innerText = d.version;
+    }).catch(() => { });
+
     document.getElementById('login-subtitle').innerText = "Acceso Administrativo";
-    document.getElementById('login-btn-submit').innerHTML = 'ENTRAR <i class="fa-solid fa-arrow-right"></i>';
+    document.getElementById('login-btn-submit').innerText = 'LOGIN';
     document.getElementById('login-btn-submit').dataset.mode = 'login';
 }
 
@@ -655,6 +676,7 @@ function applyBackground(imageData) {
 
 // Update System Functions
 function updateUI() {
+    document.getElementById('appearance-modal').style.display = 'none';
     const statusMsg = document.getElementById('update-status-msg');
 
     // Feedback visual inmediato
@@ -668,10 +690,7 @@ function updateUI() {
 
     if (statusMsg) statusMsg.innerText = 'Buscando actualizaciones...';
 
-    Toastify({
-        text: "Buscando actualizaciones de UI...",
-        style: { background: "var(--p)" }
-    }).showToast();
+
 
     // Check for UI updates - Handle API not existing
     fetch('/api/update/ui', { headers: getAuthHeaders() })
@@ -734,6 +753,7 @@ function installUIUpdate() {
 }
 
 function updateSystem() {
+    document.getElementById('appearance-modal').style.display = 'none';
     const statusMsg = document.getElementById('update-status-msg');
 
     // Feedback visual inmediato
@@ -747,10 +767,7 @@ function updateSystem() {
 
     if (statusMsg) statusMsg.innerText = 'Buscando actualizaciones del sistema...';
 
-    Toastify({
-        text: "Buscando actualizaciones del sistema...",
-        style: { background: "var(--p)" }
-    }).showToast();
+
 
     // Check for system updates - Handle API not existing
     fetch('/api/update/system', { headers: getAuthHeaders() })
@@ -2243,13 +2260,15 @@ function updateBlur(value) {
     const blurValue = document.getElementById('blur-value');
     if (blurValue) blurValue.textContent = value + 'px';
 
-    // Update CSS variable instantly
+    // Update CSS variable instantly for preview
     document.documentElement.style.setProperty('--glass-blur', value + 'px');
+}
 
+function saveBlur(value) {
     // Save to localStorage
     localStorage.setItem('glassBlur', value);
 
-    // Show feedback
+    // Show feedback only on release
     Toastify({
         text: `Desenfoque ajustado: ${value}px`,
         duration: 1500,
@@ -2339,3 +2358,22 @@ function saveDiscordSettings() {
             }).showToast();
         });
 }
+
+// Version Injection in Login
+document.addEventListener('DOMContentLoaded', () => {
+    const verSpan = document.getElementById('login-version');
+    if (verSpan) {
+        fetch('/api/version')
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.version) {
+                    verSpan.innerText = data.version;
+                } else {
+                    verSpan.innerText = '1.7.0'; // Fallback
+                }
+            })
+            .catch(() => {
+                verSpan.innerText = '1.7.0'; // Fallback on error
+            });
+    }
+});

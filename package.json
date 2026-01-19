@@ -1,7 +1,7 @@
 {
   "name": "aetherpanel-nebula",
-  "version": "1.7.2",
-  "description": "Aether Panel V1.7.2 - Glass Design Improved",
+  "version": "1.7.1",
+  "description": "Aether Panel V1.7.1 - Glass Design Improved",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
